@@ -5,7 +5,8 @@ export async function searchVideos(query) {
   if (!query) return [];
 
   try {
-    const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+    const BASE_URL = import.meta.env.VITE_SOCKET_URL || '';
+    const response = await fetch(`${BASE_URL}/api/search?q=${encodeURIComponent(query)}`);
     
     if (!response.ok) {
       const err = await response.json();
