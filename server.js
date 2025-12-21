@@ -174,9 +174,14 @@ io.on('connection', (socket) => {
         userToEmit = newUser;
     }
     
-    io.to(roomId).emit('user_joined', { user: userToEmit, count: rooms[roomId].users.length, admin: rooms[roomId].admin });
+    // If it's a new user, broadcast join. If existing (reconnect), broadcast update.
+    if (existingUserIndex === -1) {
+         io.to(roomId).emit('user_joined', { user: userToEmit, count: rooms[roomId].users.length, admin: rooms[roomId].admin });
+    } else {
+         io.to(roomId).emit('user_updated', userToEmit);
+    }
     
-    // Send full state to the new user so they know if they are admin, current video, etc.
+    // Send full state to the new/reconnecting user so they know if they are admin, current video, etc.
     socket.emit('sync_state', rooms[roomId]);
   });
 
