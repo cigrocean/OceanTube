@@ -154,12 +154,25 @@ io.on('connection', (socket) => {
 
     socket.join(room);
     
-    const newUser = { 
-      id: socket.id, 
-      name: name,
-      sessionId: sessionId
-    };
-    rooms[roomId].users.push(newUser); // Add user to room
+    const existingUserIndex = rooms[roomId].users.findIndex(u => u.sessionId === sessionId);
+    
+    let userToEmit;
+    if (existingUserIndex !== -1) {
+        // Update existing user's socket ID (reconnection)
+        rooms[roomId].users[existingUserIndex].id = socket.id;
+        rooms[roomId].users[existingUserIndex].name = name; // Update name if changed
+        userToEmit = rooms[roomId].users[existingUserIndex];
+        console.log(`User ${name} reconnected (Session: ${sessionId})`);
+    } else {
+        // Add new user
+        const newUser = { 
+            id: socket.id, 
+            name: name,
+            sessionId: sessionId
+        };
+        rooms[roomId].users.push(newUser);
+        userToEmit = newUser;
+    }
     
     io.to(roomId).emit('user_joined', { user: newUser, count: rooms[roomId].users.length, admin: rooms[roomId].admin });
     
