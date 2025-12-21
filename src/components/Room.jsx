@@ -58,6 +58,8 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
   const [passwordError, setPasswordError] = useState('');
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [showQueueOption, setShowQueueOption] = useState(false); // New Modal State
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [qrCopied, setQrCopied] = useState(false); // Added for feedback
   const [pendingVideo, setPendingVideo] = useState(null); // Video waiting for decision
   const [newRoomPassword, setNewRoomPassword] = useState('');
   const [currentRoomPassword, setCurrentRoomPassword] = useState(null);
@@ -70,7 +72,7 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
   const [searchResults, setSearchResults] = useState([]);
   const [showQueueDialog, setShowQueueDialog] = useState(false); // Queue Dialog State
   const [urlInputError, setUrlInputError] = useState(''); // URL validation error
-  const [linkCopied, setLinkCopied] = useState(false); // Track if link was copied
+
   
   // Video State
   const [currentVideoId, setCurrentVideoId] = useState('dQw4w9WgXcQ');
@@ -744,11 +746,20 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                     onClick={async () => {
                         try {
                             const svg = document.querySelector('#qr-code-container svg');
-                            if (!svg) return;
+                            if (!svg) {
+                                console.error('SVG not found');
+                                return;
+                            }
                             
                             const canvas = document.createElement('canvas');
                             const ctx = canvas.getContext('2d');
-                            const svgData = new XMLSerializer().serializeToString(svg);
+                            let svgData = new XMLSerializer().serializeToString(svg);
+                            
+                            // Ensure namespace exists for data URI
+                            if (!svgData.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)) {
+                                svgData = svgData.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+                            }
+                            
                             const img = new Image();
                             
                             // Add white background for the copied image
@@ -756,24 +767,51 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                             canvas.height = 170;
                             
                             img.onload = () => {
-                                ctx.fillStyle = 'white';
+                                ctx.fillStyle = 'white'; // White background
                                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                                 ctx.drawImage(img, 10, 10);
                                 canvas.toBlob(blob => {
+                                    if (!blob) {
+                                        alert('Failed to create image blob');
+                                        return;
+                                    }
                                     navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
-                                        .then(() => alert('QR Code copied to clipboard!')) // Simple feedback or Toast
-                                        .catch(err => console.error('Copy failed', err));
-                                });
+                                        .then(() => {
+                                            setQrCopied(true);
+                                            setTimeout(() => setQrCopied(false), 2000);
+                                        })
+                                        .catch(err => {
+                                            console.error('Clipboard write failed', err);
+                                            alert('Copy failed. Your browser might block image copying.');
+                                        });
+                                }, 'image/png');
                             };
-                            img.src = 'data:image/svg+xml;base64,' + btoa(svgData);
+                            
+                            // Handle image load error
+                            img.onerror = (e) => {
+                                console.error('Image load error', e);
+                                alert('Error processing QR image.');
+                            };
+                            
+                            img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData))); // Safe encoding
                         } catch (e) {
                             console.error('QR Copy Error', e);
                             alert('Could not copy QR image. Please screenshot instead.');
                         }
                     }}
-                    style={{ fontSize: '0.85rem', padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                    style={{ 
+                        fontSize: '0.85rem', 
+                        padding: '0.5rem 1rem', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '0.5rem',
+                        background: qrCopied ? '#10b981' : 'var(--bg-tertiary)',
+                        color: qrCopied ? 'white' : 'var(--text-primary)',
+                        transition: 'background 0.2s'
+                    }}
                  >
-                    <Copy size={14} /> Copy QR Image
+                    {qrCopied ? <Check size={14} /> : <Copy size={14} />} 
+                    {qrCopied ? 'Copied Image!' : 'Copy QR Image'}
                  </button>
              </div>
 
