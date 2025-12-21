@@ -192,6 +192,12 @@ This project is open source and available under the MIT License.
 - Powered by [Antigravity](https://antigravity.google/)
 - Built with ❤️ using React and Socket.IO
 
+## ⚠️ Troubleshooting
+
+### Server Sleeping (Render Free Tier)
+If the app takes a long time to load or the socket doesn't connect immediately, the Render server might be **sleeping** (it spins down after 15 mins of inactivity).
+- **Solution**: Use a free uptime monitor (like [UptimeRobot](https://uptimerobot.com) or [Cron-job.org](https://cron-job.org)) to ping your backend URL (e.g., `https://your-app.onrender.com/health`) every 10 minutes.
+
 ## 📞 Support
 
 If you encounter any issues or have questions, please [open an issue](https://github.com/cigrocean/OceanTube/issues) on GitHub.

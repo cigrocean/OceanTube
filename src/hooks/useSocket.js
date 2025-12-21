@@ -14,8 +14,9 @@ export function useSocket(roomId, username, sessionId, password) { // Added pass
     
     const newSocket = io(SOCKET_URL, {
         reconnection: true,
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000,
+        reconnectionAttempts: Infinity, // Keep trying until server wakes up
+        reconnectionDelay: 2000,
+        timeout: 20000, // 20s timeout for cold starts
     });
 
     setSocket(newSocket);
