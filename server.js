@@ -29,7 +29,8 @@ const io = new Server(server, {
     origin: allowedOrigins,
     methods: ["GET", "POST"],
     credentials: true
-  }
+  },
+  perMessageDeflate: false // Fixes random connection drops on some clients
 });
 
 // Health check endpoint for Render
