@@ -733,15 +733,59 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
             border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '1.5rem', alignItems: 'center'
           }}>
              <h2 style={{ margin: 0, fontSize: '1.4rem' }}>Share Room</h2>
-             <div style={{ background: 'white', padding: '1rem', borderRadius: '12px' }}>
-                 <QRCode value={window.location.href} size={150} />
+             
+             {/* QR Code Section */}
+             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', width: '100%' }}>
+                 <div id="qr-code-container" style={{ background: 'white', padding: '1rem', borderRadius: '12px' }}>
+                     <QRCode value={window.location.href} size={150} />
+                 </div>
+                 <button 
+                    className="btn-secondary"
+                    onClick={async () => {
+                        try {
+                            const svg = document.querySelector('#qr-code-container svg');
+                            if (!svg) return;
+                            
+                            const canvas = document.createElement('canvas');
+                            const ctx = canvas.getContext('2d');
+                            const svgData = new XMLSerializer().serializeToString(svg);
+                            const img = new Image();
+                            
+                            // Add white background for the copied image
+                            canvas.width = 170; // 150 + padding
+                            canvas.height = 170;
+                            
+                            img.onload = () => {
+                                ctx.fillStyle = 'white';
+                                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                                ctx.drawImage(img, 10, 10);
+                                canvas.toBlob(blob => {
+                                    navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+                                        .then(() => alert('QR Code copied to clipboard!')) // Simple feedback or Toast
+                                        .catch(err => console.error('Copy failed', err));
+                                });
+                            };
+                            img.src = 'data:image/svg+xml;base64,' + btoa(svgData);
+                        } catch (e) {
+                            console.error('QR Copy Error', e);
+                            alert('Could not copy QR image. Please screenshot instead.');
+                        }
+                    }}
+                    style={{ fontSize: '0.85rem', padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                 >
+                    <Copy size={14} /> Copy QR Image
+                 </button>
              </div>
+
              <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                  <label style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Room Link</label>
                  <div style={{ 
                      display: 'flex', gap: '0.5rem', background: 'var(--bg-tertiary)', padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--border-color)'
                  }}>
-                     <input readOnly value={window.location.href} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', flex: 1, fontSize: '0.9rem', outline: 'none', textOverflow: 'ellipsis' }} />
+                     <input readOnly value={window.location.href} style={{ 
+                         background: 'transparent', border: 'none', color: 'var(--text-secondary)', 
+                         flex: 1, fontSize: '0.9rem', outline: 'none', minWidth: 0 // Fix overlap
+                     }} />
                      <button 
                        onClick={() => { 
                          navigator.clipboard.writeText(window.location.href); 
@@ -759,11 +803,12 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                          display: 'flex',
                          alignItems: 'center',
                          gap: '0.5rem',
-                         transition: 'background 0.2s'
+                         transition: 'background 0.2s',
+                         whiteSpace: 'nowrap' // Prevent button text wrap
                        }}
                      >
                        {linkCopied ? <Check size={16} /> : <Copy size={16} />}
-                       {linkCopied ? 'Copied!' : 'Copy'}
+                       {linkCopied ? 'Copied' : 'Copy'}
                      </button>
                  </div>
              </div>
