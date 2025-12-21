@@ -39,41 +39,31 @@ app.get('/health', (req, res) => {
 // Search Proxy Endpoint
 // Proxies requests to Piped/Invidious instances to avoid CORS issues in the browser
 // Search Proxy Endpoint
-import ytsr from 'ytsr';
+import YouTube from 'youtube-sr';
 
 app.get('/api/search', async (req, res) => {
   const query = req.query.q;
   if (!query) return res.status(400).json({ error: 'Missing query' });
 
   try {
-      // 1. Get Filters to ensure we search for Videos only (improves relevance/structure)
-      const filters1 = await ytsr.getFilters(query);
-      const filter1 = filters1.get('Type').get('Video');
-      
-      // 2. Fetch results with higher limit
-      // Fallback to simple query string if filter lookup fails (unlikely but safe)
-      const searchUrl = filter1 ? filter1.url : query;
-      const result = await ytsr(searchUrl, { limit: 50 });
-      
-      if (!result.items || result.items.length === 0) {
+      // Use youtube-sr for reliable search
+      const videos = await YouTube.search(query, { 
+          limit: 20,
+          type: 'video',
+          safeSearch: false
+      });
+
+      if (!videos || videos.length === 0) {
            return res.json([]);
       }
 
-      const results = result.items.map(item => {
-          try {
-              if (item.type !== 'video') return null; // Skip playlists, channels, etc.
-              
-              return {
-                  id: item.id,
-                  title: item.title,
-                  author: item.author?.name || 'Unknown',
-                  thumbnail: item.thumbnails?.[0]?.url || null,
-                  duration: parseDuration(item.duration) // ytsr returns string "12:34"
-              };
-          } catch (itemError) {
-              return null;
-          }
-      }).filter(Boolean); // Remove failed items
+      const results = videos.map(video => ({
+          id: video.id,
+          title: video.title,
+          author: video.channel ? video.channel.name : 'Unknown',
+          thumbnail: video.thumbnail ? video.thumbnail.url : null,
+          duration: video.duration ? Math.floor(video.duration / 1000) : 0 // Convert ms to seconds
+      }));
       
       return res.json(results);
   } catch (err) {
@@ -83,13 +73,7 @@ app.get('/api/search', async (req, res) => {
 });
 
 // Helper to parse "MM:SS" or "HH:MM:SS" to seconds
-function parseDuration(durationStr) {
-    if (!durationStr) return 0;
-    const parts = durationStr.split(':').map(Number);
-    if (parts.length === 2) return parts[0] * 60 + parts[1];
-    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
-    return 0;
-}
+
 
 app.use(express.static(path.join(__dirname, 'dist')));
 
