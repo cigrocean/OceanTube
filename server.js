@@ -3,83 +3,29 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { fileURLToPath } from 'url';
 import path from 'path';
-import os from 'os'; // Import OS for network interfaces
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Network Validation Helpers
-function getLocalNetworks() {
-    const interfaces = os.networkInterfaces();
-    const subnets = [];
-    
-    // Virtual/VPN interface prefixes to ignore
-    const ignoredInterfaces = ['tun', 'tap', 'ppp', 'utun', 'br', 'docker', 'veth'];
-    
-    for (const name of Object.keys(interfaces)) {
-        // Skip VPN/Virtual interfaces
-        if (ignoredInterfaces.some(prefix => name.toLowerCase().startsWith(prefix))) {
-            console.log(`[Guard] Skipping Interface: ${name} (Virtual/VPN)`);
-            continue;
-        }
-
-        for (const iface of interfaces[name]) {
-            // Skip internal (localhost) and IPv6 for now (focus on IPv4 LAN)
-            if (!iface.internal && iface.family === 'IPv4') {
-                const parts = iface.address.split('.');
-                subnets.push(parts.slice(0, 3).join('.'));
-            }
-        }
-    }
-    return subnets;
-}
-
-function isAllowedNetwork(clientIp) {
-    // 1. Allow Localhost (Trusted as "Same Network")
-    if (clientIp === '::1' || clientIp === '127.0.0.1' || clientIp.includes('127.0.0.1')) {
-        console.log(`[Guard] Allowed ${clientIp} (Localhost Whitelist)`);
-        return true;
-    }
-    
-    // Normalize IPv6 mapped IPv4 (e.g. ::ffff:192.168.1.5)
-    let ipv4 = clientIp;
-    if (clientIp.startsWith('::ffff:')) {
-        ipv4 = clientIp.substring(7);
-    }
-    
-    // Check against Server Subnets
-    const serverSubnets = getLocalNetworks();
-    
-    // If server has no network (offline)
-    if (serverSubnets.length === 0) {
-        console.log(`[Guard] Blocked ${clientIp} (Server has no active network)`);
-        return false;
-    }
-    
-    const clientParts = ipv4.split('.');
-    if (clientParts.length !== 4) return false;
-    
-    const clientSubnet = clientParts.slice(0, 3).join('.');
-    
-    // Check match
-    const isMatched = serverSubnets.includes(clientSubnet);
-    
-    if (isMatched) {
-        console.log(`[Guard] Allowed ${ipv4} (Matched Subnet: ${clientSubnet} in [${serverSubnets.join(', ')}])`);
-    } else {
-        console.log(`[Guard] BLOCKED ${ipv4} (Subnet ${clientSubnet} NOT in [${serverSubnets.join(', ')}])`);
-    }
-    
-    return isMatched;
-}
-
 const app = express();
 const server = createServer(app);
+
+// CORS configuration for production deployment
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(',') 
+  : ['http://localhost:5173'];
+
 const io = new Server(server, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
+    origin: allowedOrigins,
+    methods: ["GET", "POST"],
+    credentials: true
   }
+});
+
+// Health check endpoint for Render
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 
@@ -154,15 +100,6 @@ io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
 
   socket.on('join_room', ({ roomId, username, sessionId, password }) => { // Accept password
-    // Security: Local Network Guard
-    const clientIp = socket.handshake.address;
-    if (!isAllowedNetwork(clientIp)) {
-        console.log(`Blocked external connection from ${clientIp}`);
-        socket.emit('connection_error', 'Access Denied: You must be on the same local network as the host.');
-        socket.disconnect(true);
-        return;
-    }
-
     const room = roomId;
     const name = username || `User ${socket.id.substring(0, 4)}`; // Default name if not provided
     

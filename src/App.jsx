@@ -62,11 +62,11 @@ function Landing() {
             <div className="landing-logo-box">
                 <Play size={40} fill="white" color="white" />
             </div>
-            <h1 className="landing-title">LocalTube</h1>
+            <h1 className="landing-title">OceanTube</h1>
           </div>
           
           <p className="landing-description">
-            Watch YouTube videos together with friends on your local network. 
+            Watch YouTube videos together with friends from anywhere. 
             Synchronized playback, real-time chat, and no lag.
           </p>
 
@@ -130,12 +130,13 @@ function Landing() {
                         className={`styled-input ${errors.room ? 'error' : ''}`}
                         style={{ cursor: 'not-allowed', fontSize: '1.2rem' }}
                         />
-                        <button type="submit" className="btn-primary" style={{ width: '100%', padding: '1rem', fontSize: '1.1rem', borderRadius: '12px' }}>Join Now</button>
+                        <button type="submit" className="btn-primary" aria-label="Join Room Now" style={{ width: '100%', padding: '1rem', fontSize: '1.1rem', borderRadius: '12px' }}>Join Now</button>
                     </form>
                     
                     <button 
                         className="btn-link" 
                         onClick={() => { setJoinInput(''); navigate('/', { replace: true }); }}
+                        aria-label="Cancel and go back to home"
                         style={{ 
                             background: 'none', 
                             border: 'none', 
@@ -150,7 +151,7 @@ function Landing() {
                  </div>
              ) : (
                 <div className="action-grid">
-                    <button className="btn-primary create-room-btn" onClick={handleCreate}>
+                    <button className="btn-primary create-room-btn" onClick={handleCreate} aria-label="Create a new room">
                         <div style={{ background: 'rgba(255,255,255,0.2)', padding: '1rem', borderRadius: '50%' }}>
                             <Play size={32} fill="currentColor" />
                         </div>
@@ -168,7 +169,7 @@ function Landing() {
                             className={`styled-input ${errors.room ? 'error' : ''}`}
                             style={{ fontSize: '1rem' }}
                             />
-                            <button type="submit" className="btn-secondary" style={{ width: '100%', padding: '0.8rem', fontSize: '1rem', borderRadius: '12px' }}>Join Room</button>
+                            <button type="submit" className="btn-secondary" aria-label="Join existing room" style={{ width: '100%', padding: '0.8rem', fontSize: '1rem', borderRadius: '12px' }}>Join Room</button>
                         </form>
                     </div>
                 </div>
@@ -226,7 +227,7 @@ function Landing() {
              </a>
              
              <a 
-               href="https://github.com/cigrocean/LocalTube" 
+               href="https://github.com/cigrocean/OceanTube" 
                target="_blank" 
                rel="noopener noreferrer"
                style={{

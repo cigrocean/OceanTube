@@ -108,7 +108,7 @@ export function VideoSearch({ onSelect, onClose, initialQuery = '', initialResul
       <div className="search-modal">
         <div className="search-header">
           <h3>Search YouTube</h3>
-          <button className="btn-close" onClick={onClose}><X size={24} /></button>
+          <button className="btn-close" onClick={onClose} aria-label="Close search"><X size={24} /></button>
         </div>
 
         <form onSubmit={handleSearch} className="search-form">
@@ -121,7 +121,7 @@ export function VideoSearch({ onSelect, onClose, initialQuery = '', initialResul
               onChange={(e) => handleQueryChange(e.target.value)}
               autoFocus
             />
-            <button type="submit" className="btn-primary" disabled={isLoading} style={{ minWidth: '100px' }}>
+            <button type="submit" className="btn-primary" disabled={isLoading} aria-label={isLoading ? 'Searching...' : 'Search'} style={{ minWidth: '100px' }}>
               {isLoading ? <Loader2 size={18} className="animate-spin" /> : 'Search'}
             </button>
           </div>

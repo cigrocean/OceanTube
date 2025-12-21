@@ -9,12 +9,10 @@ export function useSocket(roomId, username, sessionId, password) { // Added pass
   useEffect(() => {
     if (!username || !roomId) return;
 
-    // Assuming URL is defined elsewhere or using a placeholder for the server URL
-    // For example: const URL = 'http://localhost:3000'; or const URL = '/';
-    // If connecting to the same host that serves the page, `io()` or `io('/')` is sufficient.
-    // The instruction explicitly includes `URL`, so I'll add a placeholder.
-    const URL = '/'; 
-    const newSocket = io(URL, {
+    // Use environment variable for backend URL (production) or localhost (development)
+    const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000';
+    
+    const newSocket = io(SOCKET_URL, {
         reconnection: true,
         reconnectionAttempts: 5,
         reconnectionDelay: 1000,

@@ -1,8 +1,8 @@
-# LocalTube
+# OceanTube
 
-Watch YouTube videos together with friends on your local network. Synchronized playback, real-time chat, and no lag.
+Watch YouTube videos together with friends from anywhere. Synchronized playback, real-time chat, and no lag.
 
-![LocalTube](https://img.shields.io/badge/LocalTube-v1.0-blue)
+![OceanTube](https://img.shields.io/badge/OceanTube-v1.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ## ✨ Features
@@ -47,8 +47,8 @@ Watch YouTube videos together with friends on your local network. Synchronized p
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/cigrocean/LocalTube.git
-cd LocalTube
+git clone https://github.com/cigrocean/OceanTube.git
+cd OceanTube
 ```
 
 2. Install dependencies:
@@ -127,7 +127,7 @@ As a non-admin user, you can:
 ## 📁 Project Structure
 
 ```
-LocalTube/
+OceanTube/
 ├── src/
 │   ├── components/
 │   │   ├── Room.jsx          # Main room component
@@ -194,8 +194,8 @@ This project is open source and available under the MIT License.
 
 ## 📞 Support
 
-If you encounter any issues or have questions, please [open an issue](https://github.com/cigrocean/LocalTube/issues) on GitHub.
+If you encounter any issues or have questions, please [open an issue](https://github.com/cigrocean/OceanTube/issues) on GitHub.
 
 ---
 
-**Enjoy watching videos together with LocalTube! 🎬**
+**Enjoy watching videos together with OceanTube! 🎬**

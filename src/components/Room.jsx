@@ -101,7 +101,7 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
 
    // Tab Title Notification
    useEffect(() => {
-        document.title = unreadCount > 0 ? `(${unreadCount}) LocalTube` : 'LocalTube';
+        document.title = unreadCount > 0 ? `(${unreadCount}) OceanTube` : 'OceanTube';
    }, [unreadCount]);
   
    // Clear unread on focus
@@ -527,7 +527,7 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
       <header className="room-header">
         <div className="logo">
            <MonitorPlay className="icon-logo" />
-           <span>LocalTube</span>
+           <span>OceanTube</span>
         </div>
         <div className="room-info">
 
@@ -634,6 +634,7 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                    fontSize: '0.9rem', marginRight: '0.5rem', cursor: 'pointer'
                }}
                title="Share Room"
+               aria-label="Share room link and QR code"
            >
                <Share2 size={16} />
                <span>Share</span>
@@ -1020,7 +1021,8 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                <button 
                   className="btn-secondary mobile-chat-toggle" 
                   onClick={() => setShowMobileChat(!showMobileChat)}
-                  style={{ display: 'none', alignItems: 'center', gap: '0.5rem', position: 'relative' }} 
+                  style={{ display: 'none', alignItems: 'center', gap: '0.5rem', position: 'relative' }}
+                  aria-label={showMobileChat ? 'Hide chat' : 'Show chat'}
                >
                   <MessageSquare size={18} /> {showMobileChat ? 'Hide Chat' : 'Chat'}
                    {unreadCount > 0 && !showMobileChat && (
@@ -1039,6 +1041,7 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                          alignItems: 'center',
                          gap: '0.5rem'
                        }}
+                       aria-label="Search for YouTube videos"
                     >
                       <SearchIcon size={20} /> <span>Search Videos</span>
                     </button>
@@ -1048,6 +1051,7 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                         className="btn-secondary video-controls-paste-btn" 
                         onClick={() => setShowUrlInput(true)} 
                         title="Paste a direct YouTube link"
+                        aria-label="Paste YouTube URL"
                         style={{
                           padding: '0.6rem 1rem',
                           display: 'flex',
@@ -1065,6 +1069,7 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                        className="btn-secondary" 
                        onClick={() => setShowQueueDialog(true)}
                        title="View queue"
+                       aria-label={`View video queue, ${queue.length} video${queue.length !== 1 ? 's' : ''} queued`}
                        style={{ 
                          padding: '0.6rem 1rem', 
                          display: 'flex', 
@@ -1096,6 +1101,7 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                        onClick={() => socket?.emit('play_next', { roomId })}
                        disabled={queue.length === 0}
                        title={queue.length > 0 ? 'Skip to next video in queue' : 'Queue is empty'}
+                       aria-label={queue.length > 0 ? 'Skip to next video' : 'Skip disabled, queue is empty'}
                        style={{ 
                          padding: '0.6rem 1rem', 
                          display: 'flex', 
@@ -1266,7 +1272,7 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
 
                  <form onSubmit={sendMessage} className="chat-input fa">
                     <input type="text" placeholder="Type a message..." value={msgInput} onChange={e => setMsgInput(e.target.value)} />
-                    <button type="submit" className="btn-icon"><Send size={18} /></button>
+                    <button type="submit" className="btn-icon" aria-label="Send message"><Send size={18} /></button>
                  </form>
         </aside>
       </main>
