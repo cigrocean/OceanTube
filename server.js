@@ -39,7 +39,7 @@ app.get('/health', (req, res) => {
 // Search Proxy Endpoint
 // Proxies requests to Piped/Invidious instances to avoid CORS issues in the browser
 // Search Proxy Endpoint
-import YouTube from 'youtube-sr';
+import { YouTube } from 'youtube-sr';
 
 app.get('/api/search', async (req, res) => {
   const query = req.query.q;
