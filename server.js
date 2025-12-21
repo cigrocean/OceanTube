@@ -4,6 +4,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import { YouTube } from 'youtube-sr'; // Move import to top
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,10 +14,11 @@ const server = createServer(app);
 
 // CORS configuration for production deployment
 const allowedOrigins = process.env.ALLOWED_ORIGINS 
-  ? process.env.ALLOWED_ORIGINS.split(',') 
+  ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
   : ['http://localhost:5173'];
 
-app.use(cors({
+// Apply CORS only to API routes to avoid conflict with Socket.IO
+app.use('/api', cors({
   origin: allowedOrigins,
   methods: ['GET', 'POST'],
   credentials: true
@@ -39,7 +41,7 @@ app.get('/health', (req, res) => {
 // Search Proxy Endpoint
 // Proxies requests to Piped/Invidious instances to avoid CORS issues in the browser
 // Search Proxy Endpoint
-import { YouTube } from 'youtube-sr';
+
 
 app.get('/api/search', async (req, res) => {
   const query = req.query.q;
