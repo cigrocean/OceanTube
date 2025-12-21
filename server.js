@@ -479,15 +479,5 @@ if (process.env.NODE_ENV !== 'production') {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  const nets = os.networkInterfaces();
-  let lanIp = 'localhost';
-  for (const name of Object.keys(nets)) {
-      for (const net of nets[name]) {
-          if (net.family === 'IPv4' && !net.internal) {
-              lanIp = net.address;
-          }
-      }
-  }
   console.log(`Server running on port ${PORT}`);
-  console.log(`Access via LAN: http://${lanIp}:${PORT}`);
 });
