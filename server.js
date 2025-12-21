@@ -26,9 +26,9 @@ app.use('/api', cors({
 
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
+    origin: "*", // Allow all origins for debugging
     methods: ["GET", "POST"],
-    credentials: true
+    credentials: false // Must be false when origin is *
   },
   perMessageDeflate: false // Fixes random connection drops on some clients
 });
