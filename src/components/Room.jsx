@@ -72,6 +72,7 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
   const [searchResults, setSearchResults] = useState([]);
   const [showQueueDialog, setShowQueueDialog] = useState(false); // Queue Dialog State
   const [urlInputError, setUrlInputError] = useState(''); // URL validation error
+  const [notification, setNotification] = useState(null); // Toast Notification { message, type }
 
   
   // Video State
@@ -364,13 +365,14 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                  video: { ...video, addedBy: displayName } 
              });
          } else {
-             socket.emit('request_queue_add', {
-                 roomId,
-                 video: { ...video, addedBy: displayName }
-             });
-             alert("Request sent to Admin for approval.");
-         }
-     }
+              socket.emit('request_queue_add', {
+                  roomId,
+                  video: { ...video, addedBy: displayName }
+              });
+              setNotification({ message: 'Request sent to Admin for approval.', type: 'success' });
+              setTimeout(() => setNotification(null), 3000);
+          }
+      }
   };
 
   const removeFromQueue = (index) => {
@@ -879,6 +881,20 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                 Close
              </button>
           </div>
+        </div>
+      )}
+
+       {notification && (
+        <div style={{
+            position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)',
+            background: notification.type === 'error' ? '#ef4444' : '#10b981',
+            color: 'white', padding: '1rem 2rem', borderRadius: '50px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)', zIndex: 20000,
+            display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: '500',
+            animation: 'fadeIn 0.3s ease-out'
+        }}>
+            {notification.type === 'success' ? <Check size={20} /> : null}
+            {notification.message}
         </div>
       )}
 
