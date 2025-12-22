@@ -1189,22 +1189,23 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                        <span className="notification-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
                    )}
                </button>
+
+               {/* Search Videos Button (Visible to All) */}
+               <button 
+                  className="btn-primary video-controls-search-btn" 
+                  onClick={() => setShowSearch(true)}
+                  style={{
+                    padding: '0.6rem 1rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem'
+                  }}
+                  aria-label="Search for YouTube videos"
+               >
+                 <SearchIcon size={20} /> <span className="desktop-only-text">Search Videos</span>
+               </button>
                {isAdmin ? (
                  <div className="video-controls-wrapper">
-                    {/* Search Videos Button */}
-                    <button 
-                       className="btn-primary video-controls-search-btn" 
-                       onClick={() => setShowSearch(true)}
-                       style={{
-                         padding: '0.6rem 1rem',
-                         display: 'flex',
-                         alignItems: 'center',
-                         gap: '0.5rem'
-                       }}
-                       aria-label="Search for YouTube videos"
-                    >
-                      <SearchIcon size={20} /> <span>Search Videos</span>
-                    </button>
                     
                     {/* Paste URL Button */}
                     <button 
