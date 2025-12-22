@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { VideoPlayer } from './VideoPlayer';
 import { VideoSearch } from './VideoSearch';
 import { useSocket } from '../hooks/useSocket';
-import { Send, Users, Film, MessageSquare, MonitorPlay, Crown, Edit2, Search as SearchIcon, X, Link as LinkIcon, UserX, UserCog, Lock, Key, Share2, LogOut, Check, ListPlus, PlayCircle, ChevronUp, ChevronDown, SkipForward, Copy } from 'lucide-react';
+import { Send, Users, Film, MessageSquare, MonitorPlay, Crown, Edit2, Search as SearchIcon, X, Link as LinkIcon, UserCog, Lock, Key, Share2, LogOut, Check, ListPlus, PlayCircle, ChevronUp, ChevronDown, SkipForward, Copy } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -117,24 +117,9 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
         return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
    }, []);
 
-  // Mute Dialog State
-  const [showMuteDialog, setShowMuteDialog] = useState(false);
-  const [userToMute, setUserToMute] = useState(null);
 
-  // listen for mute events
-  useEffect(() => {
-      if (!socket) return;
-      
-      socket.on('user_muted', ({ userId, sessionId, mutedUntil }) => {
-          setUsers(prev => prev.map(u => 
-              (u.sessionId === sessionId || u.id === userId) ? { ...u, mutedUntil } : u
-          ));
-      });
-      
-      return () => {
-          socket.off('user_muted');
-      };
-  }, [socket]);
+
+
 
   // Save session to localStorage when joining or name changes
   useEffect(() => {
@@ -317,31 +302,16 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
   }, []);
 
   // Helper to format remaining mute time
-  const getMuteTimeRemaining = () => {
-      // currentUser is derived state, ensure it's fresh
-      // We need to re-find current user if users array changed
-      const me = users.find(u => u.id === socket?.id);
-      if (!me?.mutedUntil) return null;
-      const remaining = Math.ceil((me.mutedUntil - Date.now()) / 60000); // Minutes
-      return remaining > 0 ? remaining : null;
-  };
-
+  
   const sendMessage = (e) => {
     e?.preventDefault();
     if (!socket) return;
-    
-    // Check for Muted status
-    if (getMuteTimeRemaining()) {
-        alert(`You are muted. Try again later.`);
-        return;
-    }
     
     if (msgInput.trim()) {
       socket.emit('chat_message', { roomId, message: msgInput });
       setMsgInput('');
     }
   };
-
 
   const changeVideo = (e) => {
     e.preventDefault();
@@ -634,10 +604,7 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                                 <div key={user.id} className="user-list-item">
                                     <div className="user-info">
                                         <Users size={14} />
-                                        <span>
-                                            {user.name}
-                                            {user.mutedUntil && user.mutedUntil > Date.now() && <span style={{ fontSize: '0.6em', marginLeft: '6px', padding: '1px 4px', borderRadius: '4px', background: 'var(--bg-primary)', opacity: 0.7, border: '1px solid var(--border-color)' }}>MUTED</span>}
-                                        </span>
+                                        <span>{user.name}</span>
                                         {user.id === adminId && <Crown size={12} style={{ color: '#4f46e5' }} />}
                                     </div>
                                     {isAdmin && user.id !== socket?.id && (
@@ -647,14 +614,6 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                                                     <UserCog size={14} />
                                                 </button>
                                             )}
-                                            <button 
-                                              className="btn-icon" 
-                                              onClick={(e) => { e.stopPropagation(); setUserToMute(user); setShowMuteDialog(true); setShowUserList(false); }} 
-                                              title="Mute User" 
-                                              style={{ color: 'var(--text-secondary)' }}
-                                            >
-                                                <UserX size={14} />
-                                            </button>
                                             <button className="btn-icon" onClick={(e) => { e.stopPropagation(); handleKickUser(user.id); }} title="Kick User" style={{ color: '#ef4444' }}>
                                                 <LogOut size={14} />
                                             </button>
@@ -1405,57 +1364,12 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
            </div>
 
                  <form onSubmit={sendMessage} className="chat-input fa">
-                    <input 
-                        type="text" 
-                        placeholder={getMuteTimeRemaining() ? `Muted (${getMuteTimeRemaining()}m remaining)` : "Type a message..."}
-                        value={msgInput} 
-                        onChange={e => setMsgInput(e.target.value)}
-                        disabled={!!getMuteTimeRemaining()}
-                        style={{
-                            opacity: getMuteTimeRemaining() ? 0.6 : 1,
-                            cursor: getMuteTimeRemaining() ? 'not-allowed' : 'text'
-                        }}
-                    />
-                    <button type="submit" className="btn-icon" aria-label="Send message" disabled={!!getMuteTimeRemaining()}><Send size={18} /></button>
+                    <input type="text" placeholder="Type a message..." value={msgInput} onChange={e => setMsgInput(e.target.value)} />
+                    <button type="submit" className="btn-icon" aria-label="Send message"><Send size={18} /></button>
                  </form>
         </aside>
       </main>
       
-      {/* Mute User Dialog */}
-      {showMuteDialog && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100
-        }}>
-           <div style={{
-             background: 'var(--bg-secondary)', padding: '2rem', borderRadius: '16px', width: '90%', maxWidth: '350px',
-             border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '1.5rem'
-           }}>
-              <h2 style={{ margin: 0, fontSize: '1.3rem' }}>Mute {userToMute?.name}</h2>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <button className="btn-secondary" onClick={() => { 
-                      socket.emit('mute_user', { roomId, targetUserId: userToMute.id, durationMinutes: 1 }, (res) => {
-                          if (!res.success) alert(`Failed: ${res.error} (Sent Room: ${roomId})`);
-                          else setShowMuteDialog(false);
-                      }); 
-                  }}>1 Minute</button>
-                  <button className="btn-secondary" onClick={() => { 
-                      socket.emit('mute_user', { roomId, targetUserId: userToMute.id, durationMinutes: 5 }, (res) => {
-                          if (!res.success) alert(`Failed: ${res.error} (Sent Room: ${roomId})`);
-                          else setShowMuteDialog(false);
-                      }); 
-                  }}>5 Minutes</button>
-                  <button className="btn-secondary" onClick={() => { 
-                       socket.emit('mute_user', { roomId, targetUserId: userToMute.id, durationMinutes: 30 }, (res) => {
-                          if (!res.success) alert(`Failed: ${res.error} (Sent Room: ${roomId})`);
-                          else setShowMuteDialog(false);
-                      }); 
-                  }}>30 Minutes</button>
-              </div>
-              <button className="btn-danger" onClick={() => setShowMuteDialog(false)}>Cancel</button>
-           </div>
-        </div>
-      )}
     </div>
   );
 }
