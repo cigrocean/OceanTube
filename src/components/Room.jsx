@@ -213,7 +213,9 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
     });
 
     socket.on('user_updated', (updatedUser) => {
-         setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
+         setUsers(prev => prev.map(u => 
+             (u.sessionId === updatedUser.sessionId || u.id === updatedUser.id) ? updatedUser : u
+         ));
     });
 
     socket.on('admin_changed', ({ newAdminId, newAdminName }) => {
