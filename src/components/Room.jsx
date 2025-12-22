@@ -477,7 +477,9 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
   };
 
   const onPause = () => {
+      console.log('[Room] onPause called. Admin:', isAdmin);
       if (isAdmin) {
+          console.log('[Room] Emitting pause action');
           socket?.emit('sync_action', { roomId, type: 'pause' });
       }
   };

@@ -16,12 +16,12 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
   const [clientPaused, setClientPaused] = useState(false); // Track if client manually paused
 
   // Keep track of latest props to access them inside onReady/async callbacks without stale closures
-  const stateRef = useRef({ playing, videoId });
+  const stateRef = useRef({ playing, videoId, isAdmin, onPlay, onPause, onEnded, onSeek });
 
   // Update refs whenever props change
   useEffect(() => {
-      stateRef.current.playing = playing;
-  }, [playing]);
+      stateRef.current = { playing, videoId, isAdmin, onPlay, onPause, onEnded, onSeek };
+  }, [playing, videoId, isAdmin, onPlay, onPause, onEnded, onSeek]);
 
   // Update internal videoId if props change
   useEffect(() => {
@@ -31,26 +31,7 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
       }
   }, [propVideoId, url]);
 
-  // Sync stateRef and Load Video when ID changes
-  useEffect(() => {
-      stateRef.current.videoId = videoId;
-      
-      // If player is ready and ID changes, load it appropriately
-      if (isPlayerReady && playerRef.current && videoId) {
-          const currentPlaying = stateRef.current.playing;
-          if (currentPlaying) {
-              // Load and continue playing
-              if (typeof playerRef.current.loadVideoById === 'function') {
-                  playerRef.current.loadVideoById(videoId);
-              }
-          } else {
-              // Cue the video (shows thumbnail)
-              if (typeof playerRef.current.cueVideoById === 'function') {
-                  playerRef.current.cueVideoById(videoId);
-              }
-          }
-      }
-  }, [videoId, isPlayerReady]);
+  // ... (Load video effect usually follows here)
 
   // 2. Initialize Player - Only run if player doesn't exist
   useEffect(() => {
@@ -92,42 +73,44 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                         // Apply latest state immediately
                         const currentState = stateRef.current;
                         
-                        // Always try to sync to current ID and playing state
-                        if (currentState.videoId) {
-                             if (currentState.videoId !== videoId) {
-                                 e.target.loadVideoById(currentState.videoId);
-                             }
+                        if (currentState.videoId && currentState.videoId !== videoId) {
+                             e.target.loadVideoById(currentState.videoId);
+                        }
                              
-                             if (currentState.playing) {
-                                 e.target.playVideo();
-                             } else {
-                                 // ensure cued if not playing
-                                 if (currentState.videoId === videoId) {
-                                    // already cued by init
-                                 }
-                             }
+                        if (currentState.playing) {
+                             e.target.playVideo();
                         }
                     },
                     onStateChange: (e) => {
+                        // ALWAYS read fresh state from ref to avoid stale closures
+                        const current = stateRef.current;
+                        const isAdminCurrent = current.isAdmin;
+
+                        console.log('[VideoPlayer] State Change:', e.data, 'Admin:', isAdminCurrent);
+                        
                         // Admin controls broadcast their state changes
-                        if (isAdmin) {
-                            if (e.data === window.YT.PlayerState.PLAYING) onPlay?.();
+                        if (isAdminCurrent) {
+                            if (e.data === window.YT.PlayerState.PLAYING) {
+                                console.log('[VideoPlayer] Admin PLAY detected');
+                                current.onPlay?.();
+                            }
                             if (e.data === window.YT.PlayerState.PAUSED) {
+                                console.log('[VideoPlayer] Admin PAUSE detected. Vis:', document.visibilityState);
                                 // Ignore auto-pauses from background tabs to prevent killing the server timer
                                 if (document.visibilityState === 'hidden') {
                                     console.log('[VideoPlayer] Ignoring background auto-pause');
                                     return;
                                 }
-                                onPause?.();
+                                current.onPause?.();
                             }
-                            if (e.data === window.YT.PlayerState.ENDED) onEnded?.();
+                            if (e.data === window.YT.PlayerState.ENDED) current.onEnded?.();
                         }
                         
-                        if (!isAdmin) {
+                        if (!isAdminCurrent) {
                             // Non-admin clients: track their pause state
                             if (e.data === window.YT.PlayerState.PLAYING) {
                                 setClientPaused(false); // Client chose to play
-                                onPlay?.(); // This triggers request_sync in Room.jsx
+                                current.onPlay?.(); 
                             }
                             if (e.data === window.YT.PlayerState.PAUSED) {
                                 setClientPaused(true); // Client chose to pause
