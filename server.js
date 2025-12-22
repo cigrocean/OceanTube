@@ -313,6 +313,9 @@ io.on('connection', (socket) => {
               playNextVideo(roomId);
           }, timeoutMs);
       }
+      
+      // Start Heartbeat
+      startHeartbeat(roomId);
   };
 
   const stopRoomTimer = (room) => {
@@ -320,7 +323,39 @@ io.on('connection', (socket) => {
           clearTimeout(room.timer);
           room.timer = null;
       }
+      stopHeartbeat(room);
       updateRoomTimestamp(room); // Save state
+  };
+  
+  const startHeartbeat = (roomId) => {
+      const room = rooms[roomId];
+      if (!room) return;
+      
+      if (room.heartbeat) clearInterval(room.heartbeat);
+      
+      console.log(`[Heartbeat] Started for room ${roomId}`);
+      // Force sync every 10 seconds
+      room.heartbeat = setInterval(() => {
+          if (!room.playing) {
+              stopHeartbeat(room);
+              return;
+          }
+          
+          updateRoomTimestamp(room);
+          
+          // Broadcast absolute server time to force clients in line
+          io.to(roomId).emit('sync_exact', { 
+              time: room.timestamp, 
+              playing: true 
+          });
+      }, 10000);
+  };
+  
+  const stopHeartbeat = (room) => {
+      if (room.heartbeat) {
+           clearInterval(room.heartbeat);
+           room.heartbeat = null;
+      }
   };
 
   const playNextVideo = (roomId) => {
@@ -337,10 +372,15 @@ io.on('connection', (socket) => {
 
       const nextVideo = room.queue.shift();
       room.videoId = nextVideo.id;
-      room.duration = nextVideo.duration || 0; // Store duration
+      // Fallback duration to 3mins if missing to prevent timer failure
+      room.duration = nextVideo.duration || 180; 
       room.timestamp = 0;
       room.playing = true;
       room.lastPlayTime = Date.now();
+      
+      // IMMUNITY: Ignore pause events for 10 seconds after auto-play starts
+      // This prevents background tabs from auto-pausing and killing the server timer
+      room.ignorePausesUntil = Date.now() + 10000;
       
       console.log(`[AutoPlay] Playing next: ${nextVideo.title} (${room.duration}s)`);
 
@@ -373,6 +413,12 @@ io.on('connection', (socket) => {
     }
     
     if (type === 'pause') {
+        // IMMUNITY CHECK
+        if (room.ignorePausesUntil && Date.now() < room.ignorePausesUntil) {
+            console.log(`[Server] Ignoring PAUSE from admin (Auto-Play Immunity Active)`);
+            return;
+        }
+        
         stopRoomTimer(room);
         room.playing = false;
     }
