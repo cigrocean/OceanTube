@@ -52,15 +52,16 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
       }
   }, [videoId, isPlayerReady]);
 
-  // 2. Initialize Player
+  // 2. Initialize Player - Only run if player doesn't exist
   useEffect(() => {
     if (!videoId) return;
+    if (playerRef.current) return; // Already initialized
 
     let isMounted = true;
 
     const initPlayer = () => {
         if (!isMounted) return;
-        if (playerRef.current) return; // Player already exists
+        if (playerRef.current) return;
         if (!containerRef.current) return;
         
         console.log('VideoPlayer: Creating player for', videoId);
@@ -73,7 +74,7 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
             const player = new window.YT.Player(playerDiv, {
                 height: '100%',
                 width: '100%',
-                videoId: videoId, // Pass ID immediately to ensure load
+                videoId: videoId, 
                 playerVars: {
                     autoplay: 0,
                     controls: 1,
@@ -91,17 +92,20 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                         // Apply latest state immediately
                         const currentState = stateRef.current;
                         
-                        if (currentState.videoId && currentState.videoId !== videoId) {
-                            // If ID changed during init, load the new one
-                            if (currentState.playing) {
-                                e.target.loadVideoById(currentState.videoId);
-                                e.target.playVideo();
-                            } else {
-                                e.target.cueVideoById(currentState.videoId);
-                            }
-                        } else if (currentState.playing) {
-                             // Same ID, just need to play if needed
-                             e.target.playVideo();
+                        // Always try to sync to current ID and playing state
+                        if (currentState.videoId) {
+                             if (currentState.videoId !== videoId) {
+                                 e.target.loadVideoById(currentState.videoId);
+                             }
+                             
+                             if (currentState.playing) {
+                                 e.target.playVideo();
+                             } else {
+                                 // ensure cued if not playing
+                                 if (currentState.videoId === videoId) {
+                                    // already cued by init
+                                 }
+                             }
                         }
                     },
                     onStateChange: (e) => {
@@ -153,9 +157,13 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
             isMounted = false;
         };
     }
+    
+    // Cleanup is handled by separate effect below
+  }, [videoId]); 
 
-    return () => { 
-        isMounted = false;
+  // 2b. Cleanup Effect (Run only on unmount)
+  useEffect(() => {
+      return () => {
         if (playerRef.current) {
             console.log('VideoPlayer: Destroying player instance');
             try {
@@ -166,8 +174,8 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
             playerRef.current = null;
             setIsPlayerReady(false);
         }
-    };
-  }, [videoId]); // Run initialization when videoId becomes available
+      };
+  }, []);
 
   // 3. Handle Play/Pause updates
   useEffect(() => {
