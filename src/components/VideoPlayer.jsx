@@ -108,7 +108,14 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                         // Admin controls broadcast their state changes
                         if (isAdmin) {
                             if (e.data === window.YT.PlayerState.PLAYING) onPlay?.();
-                            if (e.data === window.YT.PlayerState.PAUSED) onPause?.();
+                            if (e.data === window.YT.PlayerState.PAUSED) {
+                                // Ignore auto-pauses from background tabs to prevent killing the server timer
+                                if (document.visibilityState === 'hidden') {
+                                    console.log('[VideoPlayer] Ignoring background auto-pause');
+                                    return;
+                                }
+                                onPause?.();
+                            }
                             if (e.data === window.YT.PlayerState.ENDED) onEnded?.();
                         }
                         
