@@ -1400,7 +1400,6 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                 onPlay={onPlay}
                 onPause={onPause}
                 isAdmin={isAdmin}
-                isMobile={isMobile}
                 onEnded={() => {
                       // Attempt to play next. Server validates if this user is allowed (Admin or correct video ended)
                       if (socket) socket.emit('play_next', { roomId, endedVideoId: currentVideoId });
