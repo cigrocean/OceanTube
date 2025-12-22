@@ -158,8 +158,24 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
         };
     }
     
-    // Cleanup is handled by separate effect below
-  }, [videoId]); 
+  // Cleanup handled by separate effect
+  }, []); 
+  
+  // 2a. Handle Video ID Updates (Reuse Player)
+  useEffect(() => {
+      if (!isPlayerReady || !playerRef.current) return;
+      if (!videoId) return;
+
+      console.log(`[VideoPlayer] Switching video to: ${videoId}`);
+      try {
+          // If we are already playing, load and play.
+          // If we were paused, cued might be better, but for auto-play we usually want to play.
+          // Given the server auto-play nature, we should force play.
+          playerRef.current.loadVideoById(videoId);
+      } catch(e) {
+          console.error('[VideoPlayer] Error loading video:', e);
+      }
+  }, [videoId, isPlayerReady]); 
 
   // 2b. Cleanup Effect (Run only on unmount)
   useEffect(() => {
