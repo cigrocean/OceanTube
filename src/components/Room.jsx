@@ -125,9 +125,9 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
   useEffect(() => {
       if (!socket) return;
       
-      socket.on('user_muted', ({ userId, mutedUntil }) => {
+      socket.on('user_muted', ({ userId, sessionId, mutedUntil }) => {
           setUsers(prev => prev.map(u => 
-              u.id === userId ? { ...u, mutedUntil } : u
+              (u.sessionId === sessionId || u.id === userId) ? { ...u, mutedUntil } : u
           ));
       });
       
