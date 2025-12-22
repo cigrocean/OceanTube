@@ -360,7 +360,10 @@ io.on('connection', (socket) => {
 
   const playNextVideo = (roomId) => {
       const room = rooms[roomId];
+      console.log(`[PlayNext] Executing for room ${roomId}. Queue length: ${room?.queue?.length}`);
+      
       if (!room || !room.queue || room.queue.length === 0) {
+          console.log(`[PlayNext] Queue empty. Stopping.`);
           // Playlist finished
           if (room) {
               room.playing = false;
@@ -371,6 +374,8 @@ io.on('connection', (socket) => {
       }
 
       const nextVideo = room.queue.shift();
+      console.log(`[PlayNext] Shifted video: ${nextVideo?.title} (${nextVideo?.id})`);
+      
       room.videoId = nextVideo.id;
       // Fallback duration to 3mins if missing to prevent timer failure
       room.duration = nextVideo.duration || 180; 
@@ -612,13 +617,13 @@ io.on('connection', (socket) => {
   socket.on('play_next', ({ roomId, endedVideoId }) => {
       if (!rooms[roomId]) return;
       
+      console.log(`[PlayNext] Request for room ${roomId}. Reported ended: ${endedVideoId}, Current: ${rooms[roomId].videoId}`);
+      
       // Allow if Admin OR if the reported ended video matches current (crowd-sourced auto-play)
       const isCurrentVideo = endedVideoId && rooms[roomId].videoId === endedVideoId;
       
-      // Also allow if it's the server triggering itself (internal call? no, internal calls function strictly)
-      // If client calls this, we treat it as a "Force Skip" request if Admin, or "End Report" if User
-      
       if (rooms[roomId].admin !== socket.id && !isCurrentVideo) {
+          console.log(`[PlayNext] Unauthorized or Stale request`);
           return; // Unauthorized skip
       }
       
