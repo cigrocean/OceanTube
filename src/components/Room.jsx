@@ -1394,6 +1394,27 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
            )}
 
            <div className="video-player-wrapper" style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column' }}>
+             <VideoPlayer 
+                videoId={currentVideoId}
+                playing={isPlaying}
+                onPlay={onPlay}
+                onPause={onPause}
+                isAdmin={isAdmin}
+                isMobile={isMobile}
+                onEnded={() => {
+                      // Attempt to play next. Server validates if this user is allowed (Admin or correct video ended)
+                      if (socket) socket.emit('play_next', { roomId, endedVideoId: currentVideoId });
+                }}
+                onSeek={(newTime) => {
+                      if (isAdmin && socket) {
+                          console.log(`[Room] Admin seeked to ${newTime}s`);
+                          socket.emit('sync_action', { 
+                             roomId, 
+                             type: 'seek', 
+                             payload: newTime 
+                          });
+                      }
+                }}
              />
            </div>
         </section>
