@@ -1435,19 +1435,19 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   <button className="btn-secondary" onClick={() => { 
                       socket.emit('mute_user', { roomId, targetUserId: userToMute.id, durationMinutes: 1 }, (res) => {
-                          if (!res.success) alert(`Failed: ${res.error}`);
+                          if (!res.success) alert(`Failed: ${res.error} (Sent Room: ${roomId})`);
                           else setShowMuteDialog(false);
                       }); 
                   }}>1 Minute</button>
                   <button className="btn-secondary" onClick={() => { 
                       socket.emit('mute_user', { roomId, targetUserId: userToMute.id, durationMinutes: 5 }, (res) => {
-                          if (!res.success) alert(`Failed: ${res.error}`);
+                          if (!res.success) alert(`Failed: ${res.error} (Sent Room: ${roomId})`);
                           else setShowMuteDialog(false);
                       }); 
                   }}>5 Minutes</button>
                   <button className="btn-secondary" onClick={() => { 
                        socket.emit('mute_user', { roomId, targetUserId: userToMute.id, durationMinutes: 30 }, (res) => {
-                          if (!res.success) alert(`Failed: ${res.error}`);
+                          if (!res.success) alert(`Failed: ${res.error} (Sent Room: ${roomId})`);
                           else setShowMuteDialog(false);
                       }); 
                   }}>30 Minutes</button>

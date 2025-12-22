@@ -293,7 +293,8 @@ io.on('connection', (socket) => {
       console.log(`[Mute] Attempt: Admin ${socket.id} muting ${targetUserId} in ${roomId} for ${durationMinutes}m`);
       
       if (!rooms[roomId]) {
-          ack({ success: false, error: 'Room not found' });
+          console.log(`[Mute] Failed: Room ${roomId} not found. Available: ${Object.keys(rooms).join(', ')}`);
+          ack({ success: false, error: `Room ${roomId} not found` });
           return;
       }
       if (rooms[roomId].admin !== socket.id) {
