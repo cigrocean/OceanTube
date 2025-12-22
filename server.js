@@ -415,6 +415,7 @@ io.on('connection', (socket) => {
         room.playing = true;
         room.lastPlayTime = Date.now();
         startRoomTimer(roomId);
+        io.to(roomId).emit('sync_action', { type: 'play', sender: socket.id });
     }
     
     if (type === 'pause') {
@@ -425,8 +426,8 @@ io.on('connection', (socket) => {
         stopRoomTimer(room);
         room.playing = false;
         
-        // Broadcast pause
-        socket.to(roomId).emit('sync_action', { type: 'pause', sender: socket.id });
+        // Broadcast pause to EVERYONE (including sender) so their local state confirms it
+        io.to(roomId).emit('sync_action', { type: 'pause', sender: socket.id });
     }
     
     if (type === 'seek') {
@@ -436,7 +437,12 @@ io.on('connection', (socket) => {
             room.lastPlayTime = Date.now(); // Reset interval start
             startRoomTimer(roomId); // Restart timer
         }
+        
+        // Broadcast seek to EVERYONE
+        io.to(roomId).emit('sync_action', { type: 'seek', payload, sender: socket.id });
     }
+    
+    // Broadcast other actions normally if any (like change_video is handled elsewhere)
     
     if (type === 'change_video') {
        stopRoomTimer(room);
