@@ -1418,6 +1418,27 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                  </form>
         </aside>
       </main>
+      
+      {/* Mute User Dialog */}
+      {showMuteDialog && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100
+        }}>
+           <div style={{
+             background: 'var(--bg-secondary)', padding: '2rem', borderRadius: '16px', width: '90%', maxWidth: '350px',
+             border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '1.5rem'
+           }}>
+              <h2 style={{ margin: 0, fontSize: '1.3rem' }}>Mute {userToMute?.name}</h2>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <button className="btn-secondary" onClick={() => { socket.emit('mute_user', { roomId, targetUserId: userToMute.id, durationMinutes: 1 }); setShowMuteDialog(false); }}>1 Minute</button>
+                  <button className="btn-secondary" onClick={() => { socket.emit('mute_user', { roomId, targetUserId: userToMute.id, durationMinutes: 5 }); setShowMuteDialog(false); }}>5 Minutes</button>
+                  <button className="btn-secondary" onClick={() => { socket.emit('mute_user', { roomId, targetUserId: userToMute.id, durationMinutes: 30 }); setShowMuteDialog(false); }}>30 Minutes</button>
+              </div>
+              <button className="btn-danger" onClick={() => setShowMuteDialog(false)}>Cancel</button>
+           </div>
+        </div>
+      )}
     </div>
   );
 }
