@@ -79,6 +79,11 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                              
                         if (currentState.playing) {
                              e.target.playVideo();
+                        } else {
+                             // Force pause/cue to show thumbnail
+                             if (currentState.videoId === videoId) {
+                                  e.target.cueVideoById(videoId);
+                             }
                         }
                     },
                     onStateChange: (e) => {
@@ -110,9 +115,16 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                             // Non-admin clients: track their pause state
                             if (e.data === window.YT.PlayerState.PLAYING) {
                                 setClientPaused(false); // Client chose to play
-                                current.onPlay?.(); 
-                            }
-                            if (e.data === window.YT.PlayerState.PAUSED) {
+                                current.onPlay?.(); // This triggers request_sync in Room.jsx
+                                
+                                // FORCE SYNC ON RESUME
+                                // If we were manually paused while admin played, we are behind.
+                                // We need to ask the server "Where are we now?" immediately.
+                                if (socket) {
+                                    console.log('[VideoPlayer] Manual Resume -> Requesting immediate sync');
+                                    socket.emit('request_sync', roomId);
+                                }
+                            }if (e.data === window.YT.PlayerState.PAUSED) {
                                 setClientPaused(true); // Client chose to pause
                             }
                         }
@@ -253,8 +265,13 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
           
           switch (type) {
               case 'play':
-                  // Admin playing always overrides client pause state
-                  if (!isAdmin) setClientPaused(false);
+                  // User Requirement: "Client pauses is not affected by the admin"
+                  // If client manually paused, they stay paused until THEY click play.
+                  if (clientPaused && !isAdmin) {
+                      console.log('[VideoPlayer] Ignoring Admin Play because Client is manually paused.');
+                      return; 
+                  }
+                  
                   playerRef.current.playVideo();
                   break;
               case 'pause':

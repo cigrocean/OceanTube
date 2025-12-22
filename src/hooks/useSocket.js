@@ -16,8 +16,9 @@ export function useSocket(roomId, username, sessionId, password) { // Added pass
         reconnection: true,
         reconnectionAttempts: Infinity, // Keep trying until server wakes up
         reconnectionDelay: 2000,
-        timeout: 20000, // 20s timeout for cold starts
-        transports: ['polling', 'websocket'], // Try polling first (better for firewalls/proxies)
+        timeout: 20000, 
+        transports: ['polling', 'websocket'],
+        forceNew: true, // Force new connection on mount to avoid stale states
     });
 
     // Debug connection errors
