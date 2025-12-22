@@ -349,7 +349,8 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
         setPendingVideo(video);
         setShowQueueOption(true);
     } else {
-        socket?.emit('sync_action', { roomId, type: 'change_video', payload: video.id });
+        // Non-admin request
+        addToQueue(video);
     }
     // Don't close search - let user browse more results or close manually
   };
