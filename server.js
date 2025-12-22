@@ -481,21 +481,59 @@ io.on('connection', (socket) => {
 
   // --- Video Queue Handlers ---
 
-  socket.on('queue_add', ({ roomId, video }) => {
+  socket.on('queue_add', async ({ roomId, video }) => {
       console.log(`[Queue] Adding video to room ${roomId}:`, video?.title);
       if (!rooms[roomId]) return;
       
+      // Ensure queue exists
       if (!rooms[roomId].queue) rooms[roomId].queue = [];
+      
+      // If duration is missing, fetch it!
+      if (!video.duration || !video.title) {
+          try {
+              console.log(`[Queue] Fetching metadata for ${video.id || 'unknown ID'}`);
+              const result = await ytSearch({ videoId: video.id });
+              if (result) {
+                  video.title = video.title || result.title;
+                  video.duration = result.seconds;
+                  video.thumbnail = video.thumbnail || result.thumbnail;
+                  video.author = result.author ? result.author.name : 'Unknown';
+                  console.log(`[Queue] Fetched duration: ${video.duration}s`);
+              }
+          } catch (err) {
+              console.error(`[Queue] Metadata fetch failed:`, err);
+              // Fallback default? 3 minutes?
+              if (!video.duration) video.duration = 180;
+          }
+      }
+
       rooms[roomId].queue.push(video);
       
       console.log(`[Queue] Updated queue length: ${rooms[roomId].queue.length}`);
       io.to(roomId).emit('queue_updated', rooms[roomId].queue);
   });
 
-  socket.on('request_queue_add', ({ roomId, video }) => {
+  socket.on('request_queue_add', async ({ roomId, video }) => {
       if (!rooms[roomId]) return;
+      
       const adminId = rooms[roomId].admin;
       if (adminId) {
+           // If duration is missing, fetch it!
+          if (!video.duration || !video.title) {
+              try {
+                  console.log(`[Queue] Fetching metadata for request ${video.id}`);
+                  const result = await ytSearch({ videoId: video.id });
+                  if (result) {
+                      video.title = video.title || result.title;
+                      video.duration = result.seconds;
+                      video.thumbnail = video.thumbnail || result.thumbnail;
+                      video.author = result.author ? result.author.name : 'Unknown';
+                  }
+              } catch (err) {
+                  console.error(`[Queue] Metadata fetch failed:`, err);
+                  if (!video.duration) video.duration = 180; 
+              }
+          }
           io.to(adminId).emit('admin_queue_request', { video });
       }
   });
