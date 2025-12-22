@@ -552,7 +552,7 @@ io.on('connection', (socket) => {
       io.to(roomId).emit('queue_updated', rooms[roomId].queue);
   });
 });
-});
+
 
 // SPA Catch-all for non-production environments or if not caught by static middleware
 if (process.env.NODE_ENV !== 'production') {
