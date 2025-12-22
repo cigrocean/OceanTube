@@ -1413,15 +1413,6 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                              payload: newTime 
                           });
                       }
-                onSeek={(newTime) => {
-                      if (isAdmin && socket) {
-                          console.log(`[Room] Admin seeked to ${newTime}s`);
-                          socket.emit('sync_action', { 
-                             roomId, 
-                             type: 'seek', 
-                             payload: newTime 
-                          });
-                      }
                 }}
                 fitContainer={true}
              />
