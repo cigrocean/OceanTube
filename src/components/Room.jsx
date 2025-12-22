@@ -49,8 +49,10 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
   
   // Kick State
   const [showKickDialog, setShowKickDialog] = useState(false);
-  const [kickReason, setKickReason] = useState('');
-  const [showAdminPromotedDialog, setShowAdminPromotedDialog] = useState(false);
+  // Duplicate Handling
+  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
+
+
   const [unreadCount, setUnreadCount] = useState(0); // Added missing state
   
   // Password State
@@ -246,6 +248,12 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
     socket.on('invalid_password', ({ message }) => {
         setShowPasswordDialog(true);
         setPasswordError(message);
+    });
+
+    socket.on('duplicate_session', () => {
+        console.warn('Duplicate session detected. Disconnecting.');
+        setShowDuplicateDialog(true);
+        socket.disconnect();
     });
 
     socket.on('admin_queue_request', ({ video }) => {
@@ -483,6 +491,29 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
           socket?.emit('sync_action', { roomId, type: 'pause' });
       }
   };
+
+  if (showDuplicateDialog) {
+       return (
+           <div className="modal-overlay">
+               <div className="modal-box">
+                   <div style={{ color: '#ef4444', marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
+                       <Users size={48} />
+                   </div>
+                   <h2 className="modal-title">Duplicate Session</h2>
+                   <p className="modal-description">
+                       You are already connected to this room in another tab or device.
+                       <br/><br/>
+                       Please use the existing tab, or close it before joining here.
+                   </p>
+                   <button className="btn-primary" onClick={() => {
+                           window.location.href = '/'; // Leaving redirects to home
+                       }} style={{ width: '100%' }}>
+                       OK
+                   </button>
+               </div>
+           </div>
+       );
+  }
 
   if (showAdminPromotedDialog) {
       return (

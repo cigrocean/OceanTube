@@ -125,7 +125,12 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                                     socket.emit('request_sync', roomId);
                                 }
                             }if (e.data === window.YT.PlayerState.PAUSED) {
-                                setClientPaused(true); // Client chose to pause
+                                // Only mark as manual pause if we're not in the middle of a sync/seek
+                                if (!isSyncing.current) {
+                                    setClientPaused(true); // Client chose to pause
+                                } else {
+                                    console.log('[VideoPlayer] Ignoring Seek-induced PAUSE');
+                                }
                             }
                         }
                     }
@@ -289,22 +294,33 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
           }
       };
       
-      // Handle exact sync responses (from request_sync)
-      const onSyncExact = ({ time, playing: shouldPlay }) => {
-          if (!isPlayerReady || !playerRef.current) return;
+  const isSyncing = useRef(false); // Guard against seek-induced pause events
+
+  // ...
+
+  // Handle exact sync responses (from request_sync)
+  const onSyncExact = ({ time, playing: shouldPlay }) => {
+      if (!isPlayerReady || !playerRef.current) return;
+      
+      const currentTime = playerRef.current.getCurrentTime?.() || 0;
+      const timeDiff = Math.abs(currentTime - time);
+      
+      if (timeDiff > 2) {
+          console.log(`[VideoPlayer] Syncing: Seeking to ${time} (Diff: ${timeDiff.toFixed(2)}s)`);
           
-          // Get current time
-          const currentTime = playerRef.current.getCurrentTime?.() || 0;
-          const timeDiff = Math.abs(currentTime - time);
+          isSyncing.current = true; // LOCK 'clientPaused' updates
+          playerRef.current.seekTo(time, true);
           
-          // Only seek if we're more than 2 seconds out of sync
-          if (timeDiff > 2) {
-              playerRef.current.seekTo(time, true);
-          }
-          
-          // Respect client's pause state - don't force play/pause
-          // Client will stay paused if they chose to pause
-      };
+          // Unlock after brief delay to allow events to settle
+          setTimeout(() => { isSyncing.current = false; }, 1500);
+      }
+      
+      // If server is playing and we are not manually paused, force play
+      // (This handles cases where seekTo might have left us paused)
+      if (shouldPlay && !clientPaused) {
+           playerRef.current.playVideo();
+      }
+  };
       
       // Admin responds to sync requests with current time
       const onGetTime = ({ requesterId }) => {

@@ -44,11 +44,28 @@ app.get('/health', (req, res) => {
 // Search Proxy Endpoint
 
 
+// Search Cache: Query -> { timestamp: number, results: Array }
+const searchCache = new Map();
+const CACHE_TTL = 3600 * 1000; // 1 Hour
+
 app.get('/api/search', async (req, res) => {
   const query = req.query.q;
   if (!query) return res.status(400).json({ error: 'Missing query' });
 
+  // 1. Check Cache
+  const normalizedQuery = query.toLowerCase().trim();
+  if (searchCache.has(normalizedQuery)) {
+      const cached = searchCache.get(normalizedQuery);
+      const isFresh = (Date.now() - cached.timestamp) < CACHE_TTL;
+      
+      if (isFresh) {
+          console.log(`[Search] Serving cached results for: "${query}"`);
+          return res.json(cached.results);
+      }
+  }
+
   try {
+      console.log(`[Search] Fetching from YouTube: "${query}"`);
       // Use yt-search for reliable search
       const result = await ytSearch(query);
       const videos = result.videos.slice(0, 20);
@@ -64,6 +81,18 @@ app.get('/api/search', async (req, res) => {
           thumbnail: video.thumbnail, // yt-search provides 'thumbnail'
           duration: video.seconds // yt-search provides seconds directly
       }));
+      
+      // 2. Store in Cache
+      searchCache.set(normalizedQuery, {
+          timestamp: Date.now(),
+          results: results
+      });
+      
+      // Prune cache if too large (simple safeguard)
+      if (searchCache.size > 1000) {
+          const firstKey = searchCache.keys().next().value;
+          searchCache.delete(firstKey);
+      }
       
       return res.json(results);
   } catch (err) {
@@ -157,6 +186,22 @@ io.on('connection', (socket) => {
     if (existingUserIndex !== -1) {
         // Update existing user's socket ID (reconnection)
         const user = rooms[roomId].users[existingUserIndex];
+        
+        // CHECK FOR DUPLICATE TAB:
+        // If the user is NOT inactive (meaning they are currently connected and didn't just leave),
+        // and the ID is different (meaning it's a new socket, not a weird re-emit from same socket),
+        // THEN it's a duplicate tab.
+        // We check `!user.inactive` because if they are inactive, they are in the "Grace Period" waiting to reconnect.
+        // We also check if the OLD socket is still actually connected (optional but safer).
+        if (!user.inactive && user.id !== socket.id) {
+             const oldSocket = io.sockets.sockets.get(user.id);
+             if (oldSocket && oldSocket.connected) {
+                 console.log(`[Join] Duplicate session rejected for ${name} (${sessionId})`);
+                 socket.emit('duplicate_session');
+                 return; // STOP. Do not join the room.
+             }
+        }
+
         user.id = socket.id;
         user.name = name; // Update name if changed
         
@@ -567,6 +612,14 @@ io.on('connection', (socket) => {
       
       console.log(`[Queue] Updated queue length: ${rooms[roomId].queue.length}`);
       io.to(roomId).emit('queue_updated', rooms[roomId].queue);
+      
+      // Notify Chat
+      const adderName = video.addedBy || 'Admin';
+      io.to(roomId).emit('chat_message', {
+          type: 'system',
+          content: `${adderName} added "${video.title}" to queue.`,
+          timestamp: new Date().toISOString()
+      });
   });
 
   socket.on('request_queue_add', async ({ roomId, video }) => {
@@ -574,6 +627,7 @@ io.on('connection', (socket) => {
       
       const adminId = rooms[roomId].admin;
       if (adminId) {
+           // ... (metadata fetch logic)
            // If duration is missing, fetch it!
           if (!video.duration || !video.title) {
               try {
@@ -614,12 +668,20 @@ io.on('connection', (socket) => {
       if (!rooms[roomId]) return;
       if (rooms[roomId].admin !== socket.id) return;
       if (index >= 0 && index < rooms[roomId].queue.length) {
+          const removedVideo = rooms[roomId].queue[index];
           rooms[roomId].queue.splice(index, 1);
           io.to(roomId).emit('queue_updated', rooms[roomId].queue);
+          
+          io.to(roomId).emit('chat_message', {
+              type: 'system',
+              content: `Admin removed "${removedVideo.title}" from queue.`,
+              timestamp: new Date().toISOString()
+          });
       }
   });
 
   socket.on('play_next', ({ roomId, endedVideoId }) => {
+     // ... (unchanged)
       if (!rooms[roomId]) return;
       
       console.log(`[PlayNext] Request for room ${roomId}. Reported ended: ${endedVideoId}, Current: ${rooms[roomId].videoId}`);
@@ -636,14 +698,21 @@ io.on('connection', (socket) => {
   });
 
   socket.on('queue_reorder', ({ roomId, fromIndex, toIndex }) => {
-       /* ... reorder logic ... */ 
       if (!rooms[roomId]) return;
       if (rooms[roomId].admin !== socket.id) return; 
       const queue = rooms[roomId].queue;
       if (fromIndex < 0 || fromIndex >= queue.length || toIndex < 0 || toIndex >= queue.length) return;
+      
       const [movedItem] = queue.splice(fromIndex, 1);
       queue.splice(toIndex, 0, movedItem);
+      
       io.to(roomId).emit('queue_updated', rooms[roomId].queue);
+      
+      io.to(roomId).emit('chat_message', {
+          type: 'system',
+          content: `Admin moved "${movedItem.title}" to #${toIndex + 1}.`,
+          timestamp: new Date().toISOString()
+      });
   });
 });
 
