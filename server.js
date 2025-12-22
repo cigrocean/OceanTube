@@ -4,7 +4,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { fileURLToPath } from 'url';
 import path from 'path';
-import { YouTube } from 'youtube-sr'; // Move import to top
+import ytSearch from 'yt-search';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -49,23 +49,20 @@ app.get('/api/search', async (req, res) => {
   if (!query) return res.status(400).json({ error: 'Missing query' });
 
   try {
-      // Use youtube-sr for reliable search
-      const videos = await YouTube.search(query, { 
-          limit: 20,
-          type: 'video',
-          safeSearch: false
-      });
+      // Use yt-search for reliable search
+      const result = await ytSearch(query);
+      const videos = result.videos.slice(0, 20);
 
       if (!videos || videos.length === 0) {
            return res.json([]);
       }
 
       const results = videos.map(video => ({
-          id: video.id,
+          id: video.videoId,
           title: video.title,
-          author: video.channel ? video.channel.name : 'Unknown',
-          thumbnail: video.thumbnail ? video.thumbnail.url : null,
-          duration: video.duration ? Math.floor(video.duration / 1000) : 0 // Convert ms to seconds
+          author: video.author ? video.author.name : 'Unknown',
+          thumbnail: video.thumbnail, // yt-search provides 'thumbnail'
+          duration: video.seconds // yt-search provides seconds directly
       }));
       
       return res.json(results);
@@ -458,6 +455,41 @@ io.on('connection', (socket) => {
       
       console.log(`[Queue] Updated queue length: ${rooms[roomId].queue.length}`);
       io.to(roomId).emit('queue_updated', rooms[roomId].queue);
+  });
+
+  // Request to add (for non-admins)
+  socket.on('request_queue_add', ({ roomId, video }) => {
+      if (!rooms[roomId]) return;
+      
+      const adminId = rooms[roomId].admin;
+      if (adminId) {
+          console.log(`[Queue] Request from ${video.addedBy} sent to admin ${adminId}`);
+          io.to(adminId).emit('admin_queue_request', { video });
+      }
+  });
+
+  // Admin resolution
+  socket.on('resolve_queue_request', ({ roomId, video, approved }) => {
+      if (!rooms[roomId]) return;
+      if (rooms[roomId].admin !== socket.id) return; // Security check
+      
+      if (approved) {
+          if (!rooms[roomId].queue) rooms[roomId].queue = [];
+          rooms[roomId].queue.push(video);
+          
+          io.to(roomId).emit('queue_updated', rooms[roomId].queue);
+          
+          io.to(roomId).emit('chat_message', {
+              type: 'system',
+              content: `${video.addedBy} added "${video.title}" to queue (Approved).`,
+              timestamp: new Date().toISOString()
+          });
+      } else {
+          // Optional: Notify user their request was denied?
+          // We can emit to specific user if we had their socket ID in the video object, 
+          // but 'addedBy' is just a name. 
+          // For now, silent denial is fine or simple chat msg.
+      }
   });
 
   socket.on('queue_remove', ({ roomId, index }) => {

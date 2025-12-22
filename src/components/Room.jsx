@@ -78,6 +78,7 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
   const [currentVideoId, setCurrentVideoId] = useState('dQw4w9WgXcQ');
   const [isPlaying, setIsPlaying] = useState(false);
   const [queue, setQueue] = useState([]); // Queue State
+  const [pendingRequest, setPendingRequest] = useState(null); // Admin: Request to approve
   const [activeTab, setActiveTab] = useState('chat'); // 'chat' or 'queue'
   
   const messagesEndRef = useRef(null);
@@ -242,6 +243,11 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
         setPasswordError(message);
     });
 
+    socket.on('admin_queue_request', ({ video }) => {
+        setPendingRequest(video);
+        // Optional: Play a sound
+    });
+
     socket.on('chat_message', (msg) => {
         setMessages(prev => [...prev, { type: 'user', ...msg, id: uuidv4() }]);
         
@@ -351,10 +357,18 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
   const addToQueue = (video) => {
      // video: { id, title, thumbnail }
      if (socket) {
-         socket.emit('queue_add', { 
-             roomId, 
-             video: { ...video, addedBy: displayName } 
-         });
+         if (isAdmin) {
+             socket.emit('queue_add', { 
+                 roomId, 
+                 video: { ...video, addedBy: displayName } 
+             });
+         } else {
+             socket.emit('request_queue_add', {
+                 roomId,
+                 video: { ...video, addedBy: displayName }
+             });
+             alert("Request sent to Admin for approval.");
+         }
      }
   };
 
@@ -894,6 +908,58 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                        style={{ flex: 1, padding: '0.75rem', cursor: 'pointer' }}
                    >
                        {confirmationDialog.confirmText || 'Confirm'}
+                   </button>
+               </div>
+           </div>
+        </div>
+      )}
+
+      {/* Admin Queue Request Dialog */}
+      {pendingRequest && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 11000
+        }}>
+           <div style={{
+               background: 'var(--bg-secondary)', padding: '2rem', borderRadius: '16px', width: '90%', maxWidth: '400px',
+               border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '1.5rem',
+               boxShadow: '0 10px 25px rgba(0,0,0,0.5)'
+           }}>
+               <h3 style={{ margin: 0, fontSize: '1.2rem', textAlign: 'center' }}>Queue Request</h3>
+               <p style={{ textAlign: 'center', color: 'var(--text-secondary)', margin: 0 }}>
+                   <strong>{pendingRequest.addedBy}</strong> wants to add:
+               </p>
+               
+               <div style={{ 
+                   width: '100%', aspectRatio: '16/9', background: '#000', borderRadius: '8px', 
+                   backgroundImage: `url(${pendingRequest.thumbnail})`,
+                   backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative'
+               }}>
+                   <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.7)', color: 'white', padding: '0.5rem', fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                       {pendingRequest.title}
+                   </div>
+               </div>
+
+               <div style={{ display: 'flex', gap: '1rem', width: '100%' }}>
+                   <button 
+                       className="btn-danger" 
+                       onClick={() => {
+                           socket.emit('resolve_queue_request', { roomId, video: pendingRequest, approved: false });
+                           setPendingRequest(null);
+                       }}
+                       style={{ flex: 1, padding: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                   >
+                       <X size={18} /> Deny
+                   </button>
+                   <button 
+                       className="btn-primary" 
+                       onClick={() => {
+                           socket.emit('resolve_queue_request', { roomId, video: pendingRequest, approved: true });
+                           setPendingRequest(null);
+                       }}
+                       style={{ flex: 1, padding: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                   >
+                       <Check size={18} /> Approve
                    </button>
                </div>
            </div>
