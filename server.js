@@ -285,13 +285,19 @@ io.on('connection', (socket) => {
   
   // Mute User
   socket.on('mute_user', ({ roomId, targetUserId, durationMinutes }) => {
+      console.log(`[Mute] Attempt: Admin ${socket.id} muting ${targetUserId} in ${roomId} for ${durationMinutes}m`);
       if (!rooms[roomId]) return;
-      if (rooms[roomId].admin !== socket.id) return; // Only admin
+      if (rooms[roomId].admin !== socket.id) {
+          console.log('[Mute] Failed: Requester is not admin');
+          return; 
+      }
       
       const targetUser = rooms[roomId].users.find(u => u.id === targetUserId);
       if (targetUser) {
           const muteUntil = Date.now() + (durationMinutes * 60 * 1000);
           targetUser.mutedUntil = muteUntil;
+          
+          console.log(`[Mute] Success: ${targetUser.name} muted until ${muteUntil}`);
           
           io.to(roomId).emit('user_muted', { userId: targetUserId, mutedUntil });
           io.to(roomId).emit('chat_message', {
@@ -299,6 +305,8 @@ io.on('connection', (socket) => {
               content: `${targetUser.name} was muted for ${durationMinutes} minutes.`,
               timestamp: new Date().toISOString()
           });
+      } else {
+          console.log(`[Mute] Failed: Target user ${targetUserId} not found`);
       }
   });
 
