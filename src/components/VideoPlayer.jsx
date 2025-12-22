@@ -217,6 +217,34 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
       }
   }, [playing, isPlayerReady, isAdmin, clientPaused]);
 
+  // 4. Seek Detection (Polling)
+  useEffect(() => {
+      if (!isPlayerReady || !playerRef.current || !isAdmin) return;
+      
+      const checkInterval = 1000;
+      let lastTime = 0;
+      
+      const timer = setInterval(() => {
+          if (!playerRef.current || typeof playerRef.current.getCurrentTime !== 'function') return;
+          
+          try {
+              const currentTime = playerRef.current.getCurrentTime();
+              // If time difference is > 2s (normal playback is ~1s per 1s), we assume seek
+              // We also need to ignore the initial startup jump
+              const diff = Math.abs(currentTime - lastTime);
+              
+              if (diff > 2.5 && lastTime > 0) {
+                  console.log(`[VideoPlayer] Detected seek: ${lastTime} -> ${currentTime}`);
+                  onSeek?.(currentTime);
+              }
+              
+              lastTime = currentTime;
+          } catch (e) {}
+      }, checkInterval);
+      
+      return () => clearInterval(timer);
+  }, [isPlayerReady, isAdmin, onSeek]);
+
   // 4. Continuous Sync for Non-Admin Clients
   useEffect(() => {
       // Only non-admin clients need continuous sync

@@ -1394,20 +1394,6 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
            )}
 
            <div className="video-player-wrapper" style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column' }}>
-             <VideoPlayer 
-                videoId={currentVideoId}
-                playing={isPlaying}
-                onPlay={onPlay}
-                onPause={onPause}
-                 onEnded={() => {
-                      // Attempt to play next. Server validates if this user is allowed (Admin or correct video ended)
-                      socket.emit('play_next', { roomId, endedVideoId: currentVideoId });
-                 }}
-                socket={socket} 
-                roomId={roomId} 
-                key={isAdmin} 
-                isAdmin={isAdmin}
-                fitContainer={true}
              />
            </div>
         </section>
