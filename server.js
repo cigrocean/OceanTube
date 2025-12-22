@@ -383,12 +383,11 @@ io.on('connection', (socket) => {
       room.playing = true;
       room.lastPlayTime = Date.now();
       
-      // IMMUNITY: Ignore pause events for 10 seconds after auto-play starts
-      // This prevents background tabs from auto-pausing and killing the server timer
-      room.ignorePausesUntil = Date.now() + 10000;
+      room.lastPlayTime = Date.now();
       
       console.log(`[AutoPlay] Playing next: ${nextVideo.title} (${room.duration}s)`);
 
+      // Broadcast change
       io.to(roomId).emit('sync_action', { 
           type: 'change_video', 
           payload: nextVideo.id, 
@@ -406,6 +405,7 @@ io.on('connection', (socket) => {
     
     // Permission check
     if (rooms[roomId].admin !== socket.id) {
+        console.warn(`[Server] Denied ${type} from non-admin ${socket.id}`);
         return;
     }
     
@@ -419,14 +419,12 @@ io.on('connection', (socket) => {
     }
     
     if (type === 'pause') {
-        // We trust the client to filter out background auto-pauses (via visibilityState check)
-        // So if we receive a pause here, it is manual and should work instantly.
-        console.log(`[Server] Pause received from ${rooms[roomId].admin === socket.id ? 'Admin' : 'User'}`);
+        console.log(`[Server] PAUSE processed for room ${roomId}. Stopping timer.`);
         
         stopRoomTimer(room);
         room.playing = false;
         
-        // Broadcast pause to EVERYONE (including sender) so their local state confirms it
+        // Broadcast pause to EVERYONE (including sender)
         io.to(roomId).emit('sync_action', { type: 'pause', sender: socket.id });
     }
     
