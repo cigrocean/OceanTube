@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { VideoPlayer } from './VideoPlayer';
 import { VideoSearch } from './VideoSearch';
 import { useSocket } from '../hooks/useSocket';
+import { useKeepAlive } from '../hooks/useKeepAlive';
 import { Send, Users, Film, MessageSquare, MonitorPlay, Crown, Edit2, Search as SearchIcon, X, Link as LinkIcon, UserCog, Lock, Key, Share2, LogOut, Check, ListPlus, PlayCircle, ChevronUp, ChevronDown, SkipForward, Copy } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { v4 as uuidv4 } from 'uuid';
@@ -95,10 +96,13 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
    
    // Mobile State
    const [showMobileChat, setShowMobileChat] = useState(false);
+    
+    // Attempt to keep browser alive efficiently
+    useKeepAlive(isPlaying);
 
-   useEffect(() => {
-        showMobileChatRef.current = showMobileChat;
-        if (showMobileChat) {
+    useEffect(() => {
+         showMobileChatRef.current = showMobileChat;
+         if (showMobileChat) {
             setUnreadCount(0);
         }
    }, [showMobileChat]);
@@ -305,8 +309,21 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
       };
       
       window.addEventListener('beforeunload', handleBeforeUnload);
-      return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, []);
+      
+      // Force sync on visibility return
+      const handleVisibilityChange = () => {
+          if (document.visibilityState === 'visible' && socket) {
+              console.log('[Room] Tab visible, forcing sync...');
+              socket.emit('request_sync', roomId);
+          }
+      };
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      
+      return () => {
+          window.removeEventListener('beforeunload', handleBeforeUnload);
+          document.removeEventListener('visibilitychange', handleVisibilityChange);
+      };
+  }, [socket, roomId]);
 
   // Helper to format remaining mute time
   
