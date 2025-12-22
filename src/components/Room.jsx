@@ -314,13 +314,32 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
       return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
 
-  const sendMessage = (e) => {
-    e.preventDefault();
-    if (!msgInput.trim()) return;
-    socket?.emit('chat_message', { roomId, message: msgInput });
-    setMsgInput('');
-    setUnreadCount(0); // Clear on send
+  // Helper to format remaining mute time
+  const getMuteTimeRemaining = () => {
+      // currentUser is derived state, ensure it's fresh
+      // We need to re-find current user if users array changed
+      const me = users.find(u => u.id === socket?.id);
+      if (!me?.mutedUntil) return null;
+      const remaining = Math.ceil((me.mutedUntil - Date.now()) / 60000); // Minutes
+      return remaining > 0 ? remaining : null;
   };
+
+  const sendMessage = (e) => {
+    e?.preventDefault();
+    if (!socket) return;
+    
+    // Check for Muted status
+    if (getMuteTimeRemaining()) {
+        alert(`You are muted. Try again later.`);
+        return;
+    }
+    
+    if (msgInput.trim()) {
+      socket.emit('chat_message', { roomId, message: msgInput });
+      setMsgInput('');
+    }
+  };
+
 
   const changeVideo = (e) => {
     e.preventDefault();
