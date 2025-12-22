@@ -1382,11 +1382,10 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                 playing={isPlaying}
                 onPlay={onPlay}
                 onPause={onPause}
-                onEnded={() => {
-                    if (isAdmin) {
-                        socket.emit('play_next', { roomId });
-                    }
-                }}
+                 onEnded={() => {
+                      // Attempt to play next. Server validates if this user is allowed (Admin or correct video ended)
+                      socket.emit('play_next', { roomId, endedVideoId: currentVideoId });
+                 }}
                 socket={socket} 
                 roomId={roomId} 
                 key={isAdmin} 

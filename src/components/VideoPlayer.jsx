@@ -110,7 +110,9 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                             if (e.data === window.YT.PlayerState.PLAYING) onPlay?.();
                             if (e.data === window.YT.PlayerState.PAUSED) onPause?.();
                             if (e.data === window.YT.PlayerState.ENDED) onEnded?.();
-                        } else {
+                        }
+                        
+                        if (!isAdmin) {
                             // Non-admin clients: track their pause state
                             if (e.data === window.YT.PlayerState.PLAYING) {
                                 setClientPaused(false); // Client chose to play
