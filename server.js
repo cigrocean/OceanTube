@@ -284,11 +284,21 @@ io.on('connection', (socket) => {
   });
   
   // Mute User
-  socket.on('mute_user', ({ roomId, targetUserId, durationMinutes }) => {
+  socket.on('mute_user', ({ roomId, targetUserId, durationMinutes }, callback) => {
+      // Helper for ack
+      const ack = (response) => {
+          if (typeof callback === 'function') callback(response);
+      };
+      
       console.log(`[Mute] Attempt: Admin ${socket.id} muting ${targetUserId} in ${roomId} for ${durationMinutes}m`);
-      if (!rooms[roomId]) return;
+      
+      if (!rooms[roomId]) {
+          ack({ success: false, error: 'Room not found' });
+          return;
+      }
       if (rooms[roomId].admin !== socket.id) {
           console.log('[Mute] Failed: Requester is not admin');
+          ack({ success: false, error: 'You are not the admin' });
           return; 
       }
       
@@ -305,8 +315,11 @@ io.on('connection', (socket) => {
               content: `${targetUser.name} was muted for ${durationMinutes} minutes.`,
               timestamp: new Date().toISOString()
           });
+          
+          ack({ success: true, message: `Muted ${targetUser.name}` });
       } else {
           console.log(`[Mute] Failed: Target user ${targetUserId} not found`);
+          ack({ success: false, error: 'User not found in room' });
       }
   });
 

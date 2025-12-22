@@ -1431,9 +1431,24 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
            }}>
               <h2 style={{ margin: 0, fontSize: '1.3rem' }}>Mute {userToMute?.name}</h2>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <button className="btn-secondary" onClick={() => { socket.emit('mute_user', { roomId, targetUserId: userToMute.id, durationMinutes: 1 }); setShowMuteDialog(false); }}>1 Minute</button>
-                  <button className="btn-secondary" onClick={() => { socket.emit('mute_user', { roomId, targetUserId: userToMute.id, durationMinutes: 5 }); setShowMuteDialog(false); }}>5 Minutes</button>
-                  <button className="btn-secondary" onClick={() => { socket.emit('mute_user', { roomId, targetUserId: userToMute.id, durationMinutes: 30 }); setShowMuteDialog(false); }}>30 Minutes</button>
+                  <button className="btn-secondary" onClick={() => { 
+                      socket.emit('mute_user', { roomId, targetUserId: userToMute.id, durationMinutes: 1 }, (res) => {
+                          if (!res.success) alert(`Failed: ${res.error}`);
+                          else setShowMuteDialog(false);
+                      }); 
+                  }}>1 Minute</button>
+                  <button className="btn-secondary" onClick={() => { 
+                      socket.emit('mute_user', { roomId, targetUserId: userToMute.id, durationMinutes: 5 }, (res) => {
+                          if (!res.success) alert(`Failed: ${res.error}`);
+                          else setShowMuteDialog(false);
+                      }); 
+                  }}>5 Minutes</button>
+                  <button className="btn-secondary" onClick={() => { 
+                       socket.emit('mute_user', { roomId, targetUserId: userToMute.id, durationMinutes: 30 }, (res) => {
+                          if (!res.success) alert(`Failed: ${res.error}`);
+                          else setShowMuteDialog(false);
+                      }); 
+                  }}>30 Minutes</button>
               </div>
               <button className="btn-danger" onClick={() => setShowMuteDialog(false)}>Cancel</button>
            </div>
