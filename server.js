@@ -418,14 +418,15 @@ io.on('connection', (socket) => {
     }
     
     if (type === 'pause') {
-        // IMMUNITY CHECK
-        if (room.ignorePausesUntil && Date.now() < room.ignorePausesUntil) {
-            console.log(`[Server] Ignoring PAUSE from admin (Auto-Play Immunity Active)`);
-            return;
-        }
+        // We trust the client to filter out background auto-pauses (via visibilityState check)
+        // So if we receive a pause here, it is manual and should work instantly.
+        console.log(`[Server] Pause received from ${rooms[roomId].admin === socket.id ? 'Admin' : 'User'}`);
         
         stopRoomTimer(room);
         room.playing = false;
+        
+        // Broadcast pause
+        socket.to(roomId).emit('sync_action', { type: 'pause', sender: socket.id });
     }
     
     if (type === 'seek') {
