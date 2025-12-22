@@ -117,6 +117,25 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
         return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
    }, []);
 
+  // Mute Dialog State
+  const [showMuteDialog, setShowMuteDialog] = useState(false);
+  const [userToMute, setUserToMute] = useState(null);
+
+  // listen for mute events
+  useEffect(() => {
+      if (!socket) return;
+      
+      socket.on('user_muted', ({ userId, mutedUntil }) => {
+          setUsers(prev => prev.map(u => 
+              u.id === userId ? { ...u, mutedUntil } : u
+          ));
+      });
+      
+      return () => {
+          socket.off('user_muted');
+      };
+  }, [socket]);
+
   // Save session to localStorage when joining or name changes
   useEffect(() => {
     if (socket?.id && roomId) {
@@ -594,7 +613,10 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                                 <div key={user.id} className="user-list-item">
                                     <div className="user-info">
                                         <Users size={14} />
-                                        <span>{user.name}</span>
+                                        <span>
+                                            {user.name}
+                                            {user.mutedUntil && user.mutedUntil > Date.now() && <span style={{ fontSize: '0.6em', marginLeft: '6px', padding: '1px 4px', borderRadius: '4px', background: 'var(--bg-primary)', opacity: 0.7, border: '1px solid var(--border-color)' }}>MUTED</span>}
+                                        </span>
                                         {user.id === adminId && <Crown size={12} style={{ color: '#4f46e5' }} />}
                                     </div>
                                     {isAdmin && user.id !== socket?.id && (
@@ -604,8 +626,16 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                                                     <UserCog size={14} />
                                                 </button>
                                             )}
-                                            <button className="btn-icon" onClick={(e) => { e.stopPropagation(); handleKickUser(user.id); }} title="Kick User" style={{ color: '#ef4444' }}>
+                                            <button 
+                                              className="btn-icon" 
+                                              onClick={(e) => { e.stopPropagation(); setUserToMute(user); setShowMuteDialog(true); setShowUserList(false); }} 
+                                              title="Mute User" 
+                                              style={{ color: 'var(--text-secondary)' }}
+                                            >
                                                 <UserX size={14} />
+                                            </button>
+                                            <button className="btn-icon" onClick={(e) => { e.stopPropagation(); handleKickUser(user.id); }} title="Kick User" style={{ color: '#ef4444' }}>
+                                                <LogOut size={14} />
                                             </button>
                                         </div>
                                     )}
@@ -1354,8 +1384,18 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
            </div>
 
                  <form onSubmit={sendMessage} className="chat-input fa">
-                    <input type="text" placeholder="Type a message..." value={msgInput} onChange={e => setMsgInput(e.target.value)} />
-                    <button type="submit" className="btn-icon" aria-label="Send message"><Send size={18} /></button>
+                    <input 
+                        type="text" 
+                        placeholder={getMuteTimeRemaining() ? `Muted (${getMuteTimeRemaining()}m remaining)` : "Type a message..."}
+                        value={msgInput} 
+                        onChange={e => setMsgInput(e.target.value)}
+                        disabled={!!getMuteTimeRemaining()}
+                        style={{
+                            opacity: getMuteTimeRemaining() ? 0.6 : 1,
+                            cursor: getMuteTimeRemaining() ? 'not-allowed' : 'text'
+                        }}
+                    />
+                    <button type="submit" className="btn-icon" aria-label="Send message" disabled={!!getMuteTimeRemaining()}><Send size={18} /></button>
                  </form>
         </aside>
       </main>

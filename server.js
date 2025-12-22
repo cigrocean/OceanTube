@@ -159,10 +159,19 @@ io.on('connection', (socket) => {
     let userToEmit;
     if (existingUserIndex !== -1) {
         // Update existing user's socket ID (reconnection)
-        rooms[roomId].users[existingUserIndex].id = socket.id;
-        rooms[roomId].users[existingUserIndex].name = name; // Update name if changed
-        userToEmit = rooms[roomId].users[existingUserIndex];
-        console.log(`User ${name} reconnected (Session: ${sessionId})`);
+        const user = rooms[roomId].users[existingUserIndex];
+        user.id = socket.id;
+        user.name = name; // Update name if changed
+        
+        // CANCEL LEAVE TIMER if it exists
+        if (user.leaveTimer) {
+             clearTimeout(user.leaveTimer);
+             user.leaveTimer = null;
+             user.inactive = false;
+             console.log(`User ${name} reconnected (Grace period).`);
+        }
+        
+        userToEmit = user;
     } else {
         // Add new user
         const newUser = { 
@@ -200,44 +209,50 @@ io.on('connection', (socket) => {
     for (const room of socket.rooms) {
       if (rooms[room]) {
         const userIndex = rooms[room].users.findIndex(u => u.id === socket.id);
-        const leaverName = userIndex !== -1 ? rooms[room].users[userIndex].name : 'Unknown';
+        const leaver = userIndex !== -1 ? rooms[room].users[userIndex] : null; // Get full user object
         
-        rooms[room].users = rooms[room].users.filter(u => u.id !== socket.id);
-        
-         // Admin Reassignment
-        if (rooms[room].admin === socket.id) {
-            rooms[room].admin = rooms[room].users[0]?.id || null; // Next user becomes admin
+        if (leaver) {
+            // Mark user as "inactive" instead of deleting immediately
+            leaver.inactive = true;
+            
+            // Set a timer to actually remove them if they don't return
+            leaver.leaveTimer = setTimeout(() => {
+                 if (!rooms[room]) return; // Room might be gone
+                 
+                 // Check if user is still inactive (might have reconnected with same obj?)
+                 // Actually reconnection updates the OBJECT. But the Timer is bound to THIS closure?
+                 // We need to re-find the user in the array because the array might check "inactive".
+                 const currentIdx = rooms[room].users.findIndex(u => u.sessionId === leaver.sessionId);
+                 
+                 if (currentIdx !== -1 && rooms[room].users[currentIdx].inactive) {
+                     // Confirm removal
+                     console.log(`User ${leaver.name} timed out. Removing.`);
+                     rooms[room].users.splice(currentIdx, 1);
+                     
+                     // Admin Reassignment (if needed)
+                     if (rooms[room].admin === leaver.id) { // Check against OLD id (leaver.id)
+                        rooms[room].admin = rooms[room].users[0]?.id || null;
+                     }
+                     
+                     io.to(room).emit('user_left', { 
+                        userId: leaver.id, 
+                        count: rooms[room].users.length,
+                        admin: rooms[room].admin
+                     });
+                     
+                     io.to(room).emit('chat_message', {
+                        type: 'system',
+                        content: `${leaver.name} left the room.`,
+                        timestamp: new Date().toISOString()
+                     });
+                 }
+            }, 10000); // 10 seconds grace period
         }
         
-        io.to(room).emit('user_left', { 
-            userId: socket.id, 
-            count: rooms[room].users.length,
-            admin: rooms[room].admin
-        });
+        // Don't emit 'user_left' yet!
         
-        // Announce user left
-        if (leaverName !== 'Unknown') {
-            io.to(room).emit('chat_message', {
-                type: 'system',
-                content: `${leaverName} left the room.`,
-                timestamp: new Date().toISOString()
-            });
-        }
-        
-        if (rooms[room].users.length === 0) {
-           // We don't delete immediately if persistence is needed? 
-           // But here we do.
-           // PRESERVE Room for short time to allow reload
-           console.log(`Room ${room} is empty. Scheduling cleanup in 60s...`);
-           if (rooms[room].cleanupTimer) clearTimeout(rooms[room].cleanupTimer);
-           
-           rooms[room].cleanupTimer = setTimeout(() => {
-               if (rooms[room] && rooms[room].users.length === 0) {
-                   console.log(`Room ${room} cleanup executed.`);
-                   delete rooms[room];
-               }
-           }, 60000); // 1 minute persistence
-        }
+        // Clean up empty rooms (if EVERYONE is inactive?)
+        // We can keep the Room persistence logic separately, or rely on users array being empty eventually.
       }
     }
   });
@@ -266,6 +281,25 @@ io.on('connection', (socket) => {
       
       // Sync state so clients know password status (and admin gets the saved PIN back)
       io.to(roomId).emit('sync_state', rooms[roomId]);
+  });
+  
+  // Mute User
+  socket.on('mute_user', ({ roomId, targetUserId, durationMinutes }) => {
+      if (!rooms[roomId]) return;
+      if (rooms[roomId].admin !== socket.id) return; // Only admin
+      
+      const targetUser = rooms[roomId].users.find(u => u.id === targetUserId);
+      if (targetUser) {
+          const muteUntil = Date.now() + (durationMinutes * 60 * 1000);
+          targetUser.mutedUntil = muteUntil;
+          
+          io.to(roomId).emit('user_muted', { userId: targetUserId, mutedUntil });
+          io.to(roomId).emit('chat_message', {
+              type: 'system',
+              content: `${targetUser.name} was muted for ${durationMinutes} minutes.`,
+              timestamp: new Date().toISOString()
+          });
+      }
   });
 
   // Sync events
@@ -313,11 +347,20 @@ io.on('connection', (socket) => {
   });
 
   socket.on('chat_message', ({ roomId, message }) => {
-     // Find sender name
+     // Find sender
      const room = rooms[roomId];
      const user = room?.users.find(u => u.id === socket.id);
-     const name = user ? user.name : 'Unknown';
-     io.to(roomId).emit('chat_message', { userId: socket.id, name, message, timestamp: new Date().toISOString() });
+     
+     if (user) {
+         // Check Mute Status
+         if (user.mutedUntil && user.mutedUntil > Date.now()) {
+             socket.emit('error', 'You are currently muted.');
+             return;
+         }
+         
+         const name = user.name;
+         io.to(roomId).emit('chat_message', { userId: socket.id, name, message, timestamp: new Date().toISOString() });
+     }
   });
 
   // Admin Management
