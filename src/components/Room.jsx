@@ -1349,7 +1349,7 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                </button>
            </div>
            
-           {isAdmin && showSearch && (
+           {showSearch && (
              <VideoSearch 
                onSelect={handleVideoSelect} 
                onClose={() => setShowSearch(false)}
