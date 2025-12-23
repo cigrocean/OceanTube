@@ -328,6 +328,9 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                   const seekTime = typeof payload === 'object' ? payload.time : payload;
                   const seekPlaying = typeof payload === 'object' ? payload.playing : true; // Default to true/playing if legacy
 
+                  // LOCK 'clientPaused' updates: prevent seek-induced PAUSE from being treated as manual pause
+                  isSyncing.current = true;
+                  
                   // Seek
                   playerRef.current.seekTo(seekTime, true);
                   
@@ -345,6 +348,9 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                            playerRef.current.pauseVideo();
                       }
                   }
+                  
+                  // Unlock after brief delay to allow events to settle
+                  setTimeout(() => { isSyncing.current = false; }, 1000);
                   break;
           }
       };
