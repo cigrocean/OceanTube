@@ -128,7 +128,7 @@ io.on('connection', (socket) => {
       // Admin session logic (first user)
       const adminSessionId = sessionId;
       rooms[room] = { 
-        videoId: 'dQw4w9WgXcQ', 
+        videoId: 'jfKfPfyJRdk', 
         playing: false, 
         timestamp: 0,
         users: [],

@@ -254,7 +254,7 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
               // We also need to ignore the initial startup jump
               const diff = Math.abs(currentTime - lastTime);
               
-              if (diff > 2.5 && lastTime > 0) {
+              if (diff > 1.5 && lastTime > 0) {
                   console.log(`[VideoPlayer] Detected seek: ${lastTime} -> ${currentTime}`);
                   onSeek?.(currentTime);
               }
@@ -314,6 +314,9 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                   // Ensure we stay paused if client is paused
                   if (!isAdmin && clientPausedRef.current) {
                       playerRef.current.pauseVideo();
+                  } else if (!isAdmin && stateRef.current.playing) {
+                      // If we are supposed to be playing, force play after seek
+                      playerRef.current.playVideo();
                   }
                   break;
           }
