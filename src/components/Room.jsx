@@ -1439,13 +1439,13 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                       // Attempt to play next. Server validates if this user is allowed (Admin or correct video ended)
                       if (socket) socket.emit('play_next', { roomId, endedVideoId: currentVideoId });
                 }}
-                onSeek={(newTime) => {
+                onSeek={(newTime, isPlaying) => {
                       if (isAdmin && socket) {
-                          console.log(`[Room] Admin seeked to ${newTime}s`);
+                          console.log(`[Room] Admin seeked to ${newTime}s (Playing: ${isPlaying})`);
                           socket.emit('sync_action', { 
                              roomId, 
                              type: 'seek', 
-                             payload: newTime 
+                             payload: { time: newTime, playing: isPlaying }
                           });
                       }
                 }}

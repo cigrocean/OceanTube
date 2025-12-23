@@ -256,7 +256,8 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
               
               if (diff > 1.5 && lastTime > 0) {
                   console.log(`[VideoPlayer] Detected seek: ${lastTime} -> ${currentTime}`);
-                  onSeek?.(currentTime);
+                  // Pass current playing state to Sync
+                  onSeek?.(currentTime, stateRef.current.playing);
               }
               
               lastTime = currentTime;
@@ -309,16 +310,26 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                   playerRef.current.pauseVideo();
                   break;
               case 'seek':
-                  // Seek to position
-                  playerRef.current.seekTo(payload, true);
+                  // Payload can be number (legacy) or object { time, playing }
+                  const seekTime = typeof payload === 'object' ? payload.time : payload;
+                  const seekPlaying = typeof payload === 'object' ? payload.playing : true; // Default to true/playing if legacy
+
+                  // Seek
+                  playerRef.current.seekTo(seekTime, true);
                   
-                  // Ensure we stay paused if client is paused
-                  if (!isAdmin && clientPausedRef.current) {
-                      playerRef.current.pauseVideo();
-                  } else if (!isAdmin && stateRef.current.playing) {
-                      // If we are supposed to be playing, force play after seek
-                      console.log('[VideoPlayer] Seek received while playing -> Forcing Play');
-                      setTimeout(() => playerRef.current.playVideo(), 200);
+                  // Enforcement
+                  if (!isAdmin) {
+                      if (clientPausedRef.current) {
+                           // 1. If Client is manually paused, STAY PAUSED
+                           playerRef.current.pauseVideo();
+                      } else if (seekPlaying) {
+                           // 2. If Admin is playing (and we are not manually paused), PLAY
+                           console.log('[VideoPlayer] Seek (Playing) -> Forcing Play');
+                           setTimeout(() => playerRef.current.playVideo(), 200);
+                      } else {
+                           // 3. If Admin is paused, PAUSE
+                           playerRef.current.pauseVideo();
+                      }
                   }
                   break;
           }
