@@ -306,15 +306,14 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
           
           switch (type) {
               case 'play':
-                  // User Requirement: "Client pauses is not affected by the admin"
-                  // If client manually paused, they stay paused until THEY click play.
-                  if (clientPausedRef.current && !isAdmin) {
-                      console.log('[VideoPlayer] Ignoring Admin Play because Client is manually paused.');
-                      return; 
-                  }
-                  
+                  // STRICT SYNC: Admin Play -> Everyone Plays
+                  // We remove the manual pause check.
+                  console.log('[VideoPlayer] Admin Play Received -> Forcing Resume');
+                  setClientPaused(false);
+                  clientPausedRef.current = false;
                   playerRef.current.playVideo();
                   break;
+
               case 'pause':
                   // Admin pausing doesn't change clientPaused - client can still choose to play independently
                   if (!isAdmin) {
@@ -323,6 +322,7 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                   }
                   playerRef.current.pauseVideo();
                   break;
+
               case 'seek':
                   // Payload can be number (legacy) or object { time, playing }
                   const seekTime = typeof payload === 'object' ? payload.time : payload;
@@ -334,17 +334,17 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                   // Seek
                   playerRef.current.seekTo(seekTime, true);
                   
-                  // Enforcement
+                  // STRICT SYNC: Seek always resets manual pause state
                   if (!isAdmin) {
-                      if (clientPausedRef.current) {
-                           // 1. If Client is manually paused, STAY PAUSED
-                           playerRef.current.pauseVideo();
-                      } else if (seekPlaying) {
-                           // 2. If Admin is playing (and we are not manually paused), PLAY
+                      setClientPaused(false);
+                      clientPausedRef.current = false;
+
+                      if (seekPlaying) {
+                           // If Admin is playing, FORCE PLAY
                            console.log('[VideoPlayer] Seek (Playing) -> Forcing Play');
                            setTimeout(() => playerRef.current.playVideo(), 200);
                       } else {
-                           // 3. If Admin is paused, PAUSE
+                           // If Admin is paused, PAUSE
                            playerRef.current.pauseVideo();
                       }
                   }
