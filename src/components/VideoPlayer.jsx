@@ -16,6 +16,7 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
   // Track if client manually paused - Use Ref to avoid stale closures in listeners
   const [clientPaused, setClientPaused] = useState(false); 
   const clientPausedRef = useRef(clientPaused);
+  const isSyncing = useRef(false); // Guard against seek-induced pause events
 
   useEffect(() => {
       clientPausedRef.current = clientPaused;
