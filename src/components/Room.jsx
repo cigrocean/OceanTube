@@ -187,6 +187,11 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
             setIsPlaying(true);
         } else if (type === 'pause') {
             setIsPlaying(false);
+        } else if (type === 'seek') {
+            // Check if seek payload includes playing state
+            if (typeof payload === 'object' && payload.playing !== undefined) {
+                setIsPlaying(payload.playing);
+            }
         }
     });
     
