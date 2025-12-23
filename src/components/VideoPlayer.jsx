@@ -17,10 +17,30 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
   const [clientPaused, setClientPaused] = useState(false); 
   const clientPausedRef = useRef(clientPaused);
   const isSyncing = useRef(false); // Guard against seek-induced pause events
+  const remotePauseRef = useRef(false); // Guard against admin-induced pause events
 
   useEffect(() => {
       clientPausedRef.current = clientPaused;
   }, [clientPaused]);
+
+
+
+                            }
+                            if (e.data === window.YT.PlayerState.PAUSED) {
+                                // 1. Check if this was a remote pause (Admin paused us)
+                                if (remotePauseRef.current) {
+                                    console.log('[VideoPlayer] Ignoring Remote-induced PAUSE');
+                                    remotePauseRef.current = false;
+                                    return;
+                                }
+
+                                // 2. Only mark as manual pause if we're not in the middle of a sync/seek
+                                if (!isSyncing.current) {
+                                    setClientPaused(true); // Client chose to pause
+                                } else {
+                                    console.log('[VideoPlayer] Ignoring Seek-induced PAUSE');
+                                }
+                            }
 
   // Keep track of latest props to access them inside onReady/async callbacks without stale closures
   const stateRef = useRef({ playing, videoId, isAdmin, onPlay, onPause, onEnded, onSeek });
@@ -279,7 +299,7 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
               case 'play':
                   // User Requirement: "Client pauses is not affected by the admin"
                   // If client manually paused, they stay paused until THEY click play.
-                  if (clientPaused && !isAdmin) {
+                  if (clientPausedRef.current && !isAdmin) {
                       console.log('[VideoPlayer] Ignoring Admin Play because Client is manually paused.');
                       return; 
                   }
@@ -288,46 +308,44 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                   break;
               case 'pause':
                   // Admin pausing doesn't change clientPaused - client can still choose to play independently
+                  if (!isAdmin && remotePauseRef) {
+                       remotePauseRef.current = true; // Signal onStateChange to ignore next PAUSED event
+                  }
                   playerRef.current.pauseVideo();
                   break;
               case 'seek':
                   // Seek to position
                   playerRef.current.seekTo(payload, true);
                   // Ensure we stay paused if client is paused
-                  if (!isAdmin && clientPaused) {
+                  if (!isAdmin && clientPausedRef.current) {
                       playerRef.current.pauseVideo();
                   }
                   break;
           }
       };
       
-  const isSyncing = useRef(false); // Guard against seek-induced pause events
-
-  // ...
-
-  // Handle exact sync responses (from request_sync)
-  const onSyncExact = ({ time, playing: shouldPlay }) => {
-      if (!isPlayerReady || !playerRef.current) return;
-      
-      const currentTime = playerRef.current.getCurrentTime?.() || 0;
-      const timeDiff = Math.abs(currentTime - time);
-      
-      if (timeDiff > 2) {
-          console.log(`[VideoPlayer] Syncing: Seeking to ${time} (Diff: ${timeDiff.toFixed(2)}s)`);
+      const onSyncExact = ({ time, playing: shouldPlay }) => {
+          if (!isPlayerReady || !playerRef.current) return;
           
-          isSyncing.current = true; // LOCK 'clientPaused' updates
-          playerRef.current.seekTo(time, true);
+          const currentTime = playerRef.current.getCurrentTime?.() || 0;
+          const timeDiff = Math.abs(currentTime - time);
           
-          // Unlock after brief delay to allow events to settle
-          setTimeout(() => { isSyncing.current = false; }, 1500);
-      }
-      
-      // If server is playing and we are not manually paused, force play
-      // (This handles cases where seekTo might have left us paused)
-      if (shouldPlay && !clientPaused) {
-           playerRef.current.playVideo();
-      }
-  };
+          if (timeDiff > 2) {
+              console.log(`[VideoPlayer] Syncing: Seeking to ${time} (Diff: ${timeDiff.toFixed(2)}s)`);
+              
+              isSyncing.current = true; // LOCK 'clientPaused' updates
+              playerRef.current.seekTo(time, true);
+              
+              // Unlock after brief delay to allow events to settle
+              setTimeout(() => { isSyncing.current = false; }, 1500);
+          }
+          
+          // If server is playing and we are not manually paused, force play
+          // (This handles cases where seekTo might have left us paused)
+          if (shouldPlay && !clientPausedRef.current) {
+               playerRef.current.playVideo();
+          }
+      };
       
       // Admin responds to sync requests with current time
       const onGetTime = ({ requesterId }) => {
