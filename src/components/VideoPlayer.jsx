@@ -13,16 +13,7 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
   const playerRef = useRef(null);
   const [videoId, setVideoId] = useState(propVideoId || getYouTubeID(url));
   const [isPlayerReady, setIsPlayerReady] = useState(false);
-  // Track if client manually paused - Use Ref to avoid stale closures in listeners
-  const [clientPaused, setClientPaused] = useState(false); 
-  const clientPausedRef = useRef(clientPaused);
-  const isSyncing = useRef(false); // Guard against seek-induced pause events
-  const ignorePausesUntil = useRef(0); // Guard against admin-induced pause events
   const adminPauseTimeout = useRef(null); // Debounce admin pauses
-
-  useEffect(() => {
-      clientPausedRef.current = clientPaused;
-  }, [clientPaused]);
 
 
 
@@ -137,35 +128,16 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                         }
                         
                         if (!isAdminCurrent) {
-                            // Non-admin clients: track their pause state
-                            if (e.data === window.YT.PlayerState.PLAYING) {
-                                setClientPaused(false); // Client chose to play
-                                clientPausedRef.current = false; // UPDATE REF IMMEDIATELY to prevent race condition
-                                current.onPlay?.(); // This triggers request_sync in Room.jsx
-                                
-                                // FORCE SYNC ON RESUME
-                                // If we were manually paused while admin played, we are behind.
-                                // We need to ask the server "Where are we now?" immediately.
-                                if (socket) {
-                                    console.log('[VideoPlayer] Manual Resume -> Requesting immediate sync');
-                                    socket.emit('request_sync', roomId);
-                                }
-                            }
-                            if (e.data === window.YT.PlayerState.PAUSED) {
-                                // 1. Check if this was a remote pause (Admin paused us)
-                                if (Date.now() < ignorePausesUntil.current) {
-                                    console.log('[VideoPlayer] Ignoring Remote-induced PAUSE');
-                                    return;
-                                }
-
-                                // 2. Only mark as manual pause if we're not in the middle of a sync/seek
-                                if (!isSyncing.current) {
-                                    console.log('[VideoPlayer] Manual Pause Detected');
-                                    setClientPaused(true); // Client chose to pause
-                                    clientPausedRef.current = true; // UPDATE REF IMMEDIATELY
-                                } else {
-                                    console.log('[VideoPlayer] Ignoring Seek-induced PAUSE');
-                                }
+                            // Non-admin clients: Strict Sync Enforcement
+                            // If we pause but the Room says we should be playing -> Force Play
+                            if (e.data === window.YT.PlayerState.PAUSED && current.playing) {
+                                console.log('[VideoPlayer] Client Paused but Room is Playing -> Forcing Resume');
+                                // Small timeout to allow UI interaction but enforce rule
+                                setTimeout(() => {
+                                    if (stateRef.current.playing) {
+                                        e.target.playVideo();
+                                    }
+                                }, 100);
                             }
                         }
                     }
@@ -232,25 +204,13 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
   useEffect(() => {
       if (!isPlayerReady || !playerRef.current || typeof playerRef.current.playVideo !== 'function') return;
       
-      // Admin always follows the playing prop
-      if (isAdmin) {
-          if (playing) playerRef.current.playVideo();
-          else playerRef.current.pauseVideo();
+      // Strict Sync: Allow no local overrides.
+      if (playing) {
+          playerRef.current.playVideo();
       } else {
-          // No matter what, if client paused manually, STAY PAUSED
-          if (clientPaused) {
-              playerRef.current.pauseVideo();
-              return;
-          }
-
-          // Otherwise follow admin
-          if (playing) {
-              playerRef.current.playVideo();
-          } else {
-              playerRef.current.pauseVideo();
-          }
+          playerRef.current.pauseVideo();
       }
-  }, [playing, isPlayerReady, isAdmin, clientPaused]);
+  }, [playing, isPlayerReady]);
 
   // 4. Seek Detection (Polling)
   useEffect(() => {
@@ -307,19 +267,11 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
           switch (type) {
               case 'play':
                   // STRICT SYNC: Admin Play -> Everyone Plays
-                  // We remove the manual pause check.
                   console.log('[VideoPlayer] Admin Play Received -> Forcing Resume');
-                  setClientPaused(false);
-                  clientPausedRef.current = false;
                   playerRef.current.playVideo();
                   break;
 
               case 'pause':
-                  // Admin pausing doesn't change clientPaused - client can still choose to play independently
-                  if (!isAdmin) {
-                       // Use a time window to ignore any PAUSED events triggered by this remote command
-                       ignorePausesUntil.current = Date.now() + 2000; 
-                  }
                   playerRef.current.pauseVideo();
                   break;
 
@@ -328,29 +280,18 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                   const seekTime = typeof payload === 'object' ? payload.time : payload;
                   const seekPlaying = typeof payload === 'object' ? payload.playing : true; // Default to true/playing if legacy
 
-                  // LOCK 'clientPaused' updates: prevent seek-induced PAUSE from being treated as manual pause
-                  isSyncing.current = true;
-                  
                   // Seek
                   playerRef.current.seekTo(seekTime, true);
                   
-                  // STRICT SYNC: Seek always resets manual pause state
+                  // STRICT SYNC: Seek always matches Admin state
                   if (!isAdmin) {
-                      setClientPaused(false);
-                      clientPausedRef.current = false;
-
                       if (seekPlaying) {
-                           // If Admin is playing, FORCE PLAY
                            console.log('[VideoPlayer] Seek (Playing) -> Forcing Play');
                            setTimeout(() => playerRef.current.playVideo(), 200);
                       } else {
-                           // If Admin is paused, PAUSE
                            playerRef.current.pauseVideo();
                       }
                   }
-                  
-                  // Unlock after brief delay to allow events to settle
-                  setTimeout(() => { isSyncing.current = false; }, 1000);
                   break;
           }
       };
@@ -362,19 +303,15 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
           const timeDiff = Math.abs(currentTime - time);
           
           if (timeDiff > 2) {
-              console.log(`[VideoPlayer] Syncing: Seeking to ${time} (Diff: ${timeDiff.toFixed(2)}s)`);
-              
-              isSyncing.current = true; // LOCK 'clientPaused' updates
+              console.log(`[VideoPlayer] Syncing: Seeking to ${time}`);
               playerRef.current.seekTo(time, true);
-              
-              // Unlock after brief delay to allow events to settle
-              setTimeout(() => { isSyncing.current = false; }, 1500);
           }
           
-          // If server is playing and we are not manually paused, force play
-          // (This handles cases where seekTo might have left us paused)
-          if (shouldPlay && !clientPausedRef.current) {
+          // Strict Sync: Always match server
+          if (shouldPlay) {
                playerRef.current.playVideo();
+          } else {
+               playerRef.current.pauseVideo();
           }
       };
       
