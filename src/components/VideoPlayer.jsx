@@ -13,7 +13,13 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
   const playerRef = useRef(null);
   const [videoId, setVideoId] = useState(propVideoId || getYouTubeID(url));
   const [isPlayerReady, setIsPlayerReady] = useState(false);
-  const [clientPaused, setClientPaused] = useState(false); // Track if client manually paused
+  // Track if client manually paused - Use Ref to avoid stale closures in listeners
+  const [clientPaused, setClientPaused] = useState(false); 
+  const clientPausedRef = useRef(clientPaused);
+
+  useEffect(() => {
+      clientPausedRef.current = clientPaused;
+  }, [clientPaused]);
 
   // Keep track of latest props to access them inside onReady/async callbacks without stale closures
   const stateRef = useRef({ playing, videoId, isAdmin, onPlay, onPause, onEnded, onSeek });
