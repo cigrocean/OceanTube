@@ -126,6 +126,7 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                             // Non-admin clients: track their pause state
                             if (e.data === window.YT.PlayerState.PLAYING) {
                                 setClientPaused(false); // Client chose to play
+                                clientPausedRef.current = false; // UPDATE REF IMMEDIATELY to prevent race condition
                                 current.onPlay?.(); // This triggers request_sync in Room.jsx
                                 
                                 // FORCE SYNC ON RESUME
@@ -147,6 +148,7 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                                 if (!isSyncing.current) {
                                     console.log('[VideoPlayer] Manual Pause Detected');
                                     setClientPaused(true); // Client chose to pause
+                                    clientPausedRef.current = true; // UPDATE REF IMMEDIATELY
                                 } else {
                                     console.log('[VideoPlayer] Ignoring Seek-induced PAUSE');
                                 }
@@ -302,7 +304,7 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                   // Admin pausing doesn't change clientPaused - client can still choose to play independently
                   if (!isAdmin) {
                        // Use a time window to ignore any PAUSED events triggered by this remote command
-                       ignorePausesUntil.current = Date.now() + 500; 
+                       ignorePausesUntil.current = Date.now() + 2000; 
                   }
                   playerRef.current.pauseVideo();
                   break;
