@@ -311,12 +311,14 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
               case 'seek':
                   // Seek to position
                   playerRef.current.seekTo(payload, true);
+                  
                   // Ensure we stay paused if client is paused
                   if (!isAdmin && clientPausedRef.current) {
                       playerRef.current.pauseVideo();
                   } else if (!isAdmin && stateRef.current.playing) {
                       // If we are supposed to be playing, force play after seek
-                      playerRef.current.playVideo();
+                      console.log('[VideoPlayer] Seek received while playing -> Forcing Play');
+                      setTimeout(() => playerRef.current.playVideo(), 200);
                   }
                   break;
           }
