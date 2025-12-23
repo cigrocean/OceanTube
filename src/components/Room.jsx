@@ -51,6 +51,8 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
   const [showKickDialog, setShowKickDialog] = useState(false);
   // Duplicate Handling
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
+  // Admin Promotion Dialog State
+  const [showAdminPromotedDialog, setShowAdminPromotedDialog] = useState(false);
 
 
   const [unreadCount, setUnreadCount] = useState(0); // Added missing state
