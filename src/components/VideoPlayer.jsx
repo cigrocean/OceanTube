@@ -25,22 +25,6 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
 
 
 
-                            }
-                            if (e.data === window.YT.PlayerState.PAUSED) {
-                                // 1. Check if this was a remote pause (Admin paused us)
-                                if (remotePauseRef.current) {
-                                    console.log('[VideoPlayer] Ignoring Remote-induced PAUSE');
-                                    remotePauseRef.current = false;
-                                    return;
-                                }
-
-                                // 2. Only mark as manual pause if we're not in the middle of a sync/seek
-                                if (!isSyncing.current) {
-                                    setClientPaused(true); // Client chose to pause
-                                } else {
-                                    console.log('[VideoPlayer] Ignoring Seek-induced PAUSE');
-                                }
-                            }
 
   // Keep track of latest props to access them inside onReady/async callbacks without stale closures
   const stateRef = useRef({ playing, videoId, isAdmin, onPlay, onPause, onEnded, onSeek });
@@ -151,8 +135,16 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                                     console.log('[VideoPlayer] Manual Resume -> Requesting immediate sync');
                                     socket.emit('request_sync', roomId);
                                 }
-                            }if (e.data === window.YT.PlayerState.PAUSED) {
-                                // Only mark as manual pause if we're not in the middle of a sync/seek
+                            }
+                            if (e.data === window.YT.PlayerState.PAUSED) {
+                                // 1. Check if this was a remote pause (Admin paused us)
+                                if (remotePauseRef.current) {
+                                    console.log('[VideoPlayer] Ignoring Remote-induced PAUSE');
+                                    remotePauseRef.current = false;
+                                    return;
+                                }
+
+                                // 2. Only mark as manual pause if we're not in the middle of a sync/seek
                                 if (!isSyncing.current) {
                                     setClientPaused(true); // Client chose to pause
                                 } else {
