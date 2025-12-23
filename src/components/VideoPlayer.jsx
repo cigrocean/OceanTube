@@ -18,6 +18,7 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
   const clientPausedRef = useRef(clientPaused);
   const isSyncing = useRef(false); // Guard against seek-induced pause events
   const ignorePausesUntil = useRef(0); // Guard against admin-induced pause events
+  const adminPauseTimeout = useRef(null); // Debounce admin pauses
 
   useEffect(() => {
       clientPausedRef.current = clientPaused;
@@ -108,16 +109,29 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                         if (isAdminCurrent) {
                             if (e.data === window.YT.PlayerState.PLAYING) {
                                 console.log('[VideoPlayer] Admin PLAY detected');
+                                // Clear any pending pause (debounce)
+                                if (adminPauseTimeout.current) {
+                                    clearTimeout(adminPauseTimeout.current);
+                                    adminPauseTimeout.current = null;
+                                }
                                 current.onPlay?.();
                             }
                             if (e.data === window.YT.PlayerState.PAUSED) {
-                                console.log('[VideoPlayer] Admin PAUSE detected. Vis:', document.visibilityState);
-                                // Ignore auto-pauses from background tabs to prevent killing the server timer
+                                console.log('[VideoPlayer] Admin PAUSE event (Debouncing)');
+                                // Ignore auto-pauses from background tabs
                                 if (document.visibilityState === 'hidden') {
                                     console.log('[VideoPlayer] Ignoring background auto-pause');
                                     return;
                                 }
-                                current.onPause?.();
+                                
+                                // Debounce Pause: Wait 250ms to see if it's just a seek
+                                if (adminPauseTimeout.current) clearTimeout(adminPauseTimeout.current);
+                                
+                                adminPauseTimeout.current = setTimeout(() => {
+                                    console.log('[VideoPlayer] Admin PAUSE confirmed (Timeout)');
+                                    current.onPause?.();
+                                    adminPauseTimeout.current = null;
+                                }, 250);
                             }
                             if (e.data === window.YT.PlayerState.ENDED) current.onEnded?.();
                         }
