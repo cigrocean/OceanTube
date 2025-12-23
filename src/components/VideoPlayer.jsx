@@ -17,7 +17,7 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
   const [clientPaused, setClientPaused] = useState(false); 
   const clientPausedRef = useRef(clientPaused);
   const isSyncing = useRef(false); // Guard against seek-induced pause events
-  const remotePauseRef = useRef(false); // Guard against admin-induced pause events
+  const ignorePausesUntil = useRef(0); // Guard against admin-induced pause events
 
   useEffect(() => {
       clientPausedRef.current = clientPaused;
@@ -138,14 +138,14 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                             }
                             if (e.data === window.YT.PlayerState.PAUSED) {
                                 // 1. Check if this was a remote pause (Admin paused us)
-                                if (remotePauseRef.current) {
+                                if (Date.now() < ignorePausesUntil.current) {
                                     console.log('[VideoPlayer] Ignoring Remote-induced PAUSE');
-                                    remotePauseRef.current = false;
                                     return;
                                 }
 
                                 // 2. Only mark as manual pause if we're not in the middle of a sync/seek
                                 if (!isSyncing.current) {
+                                    console.log('[VideoPlayer] Manual Pause Detected');
                                     setClientPaused(true); // Client chose to pause
                                 } else {
                                     console.log('[VideoPlayer] Ignoring Seek-induced PAUSE');
@@ -300,8 +300,9 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                   break;
               case 'pause':
                   // Admin pausing doesn't change clientPaused - client can still choose to play independently
-                  if (!isAdmin && remotePauseRef) {
-                       remotePauseRef.current = true; // Signal onStateChange to ignore next PAUSED event
+                  if (!isAdmin) {
+                       // Use a time window to ignore any PAUSED events triggered by this remote command
+                       ignorePausesUntil.current = Date.now() + 500; 
                   }
                   playerRef.current.pauseVideo();
                   break;
