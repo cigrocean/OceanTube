@@ -13,12 +13,6 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
   const playerRef = useRef(null);
   const [videoId, setVideoId] = useState(propVideoId || getYouTubeID(url));
   const [isPlayerReady, setIsPlayerReady] = useState(false);
-  const adminPauseTimeout = useRef(null); // Debounce admin pauses
-  const lastPlayingTime = useRef(0); // Track last play for seek heuristic
-
-  useEffect(() => {
-      if (playing) lastPlayingTime.current = Date.now();
-  }, [playing]);
 
 
 
@@ -105,30 +99,15 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                         if (isAdminCurrent) {
                             if (e.data === window.YT.PlayerState.PLAYING) {
                                 console.log('[VideoPlayer] Admin PLAY detected');
-                                lastPlayingTime.current = Date.now(); // Mark active play
-                                // Clear any pending pause (debounce)
-                                if (adminPauseTimeout.current) {
-                                    clearTimeout(adminPauseTimeout.current);
-                                    adminPauseTimeout.current = null;
-                                }
                                 current.onPlay?.();
                             }
                             if (e.data === window.YT.PlayerState.PAUSED) {
-                                console.log('[VideoPlayer] Admin PAUSE event (Debouncing)');
+                                console.log('[VideoPlayer] Admin PAUSE detected');
                                 // Ignore auto-pauses from background tabs
                                 if (document.visibilityState === 'hidden') {
-                                    console.log('[VideoPlayer] Ignoring background auto-pause');
                                     return;
                                 }
-                                
-                                // Debounce Pause: Wait 250ms to see if it's just a seek
-                                if (adminPauseTimeout.current) clearTimeout(adminPauseTimeout.current);
-                                
-                                adminPauseTimeout.current = setTimeout(() => {
-                                    console.log('[VideoPlayer] Admin PAUSE confirmed (Timeout)');
-                                    current.onPause?.();
-                                    adminPauseTimeout.current = null;
-                                }, 250);
+                                current.onPause?.();
                             }
                             if (e.data === window.YT.PlayerState.ENDED) current.onEnded?.();
                         }
@@ -206,17 +185,25 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
       };
   }, []);
 
+  /* REMOVED: adminPauseTimeout, lastPlayingTime heuristics */
+
+  // ...
+
   // 3. Handle Play/Pause updates
   useEffect(() => {
       if (!isPlayerReady || !playerRef.current || typeof playerRef.current.playVideo !== 'function') return;
       
-      // Strict Sync: Allow no local overrides.
+      // CRITICAL FIX: Admin controls itself via UI. React props should NOT force Admin player state.
+      // This prevents the "Feedback Loop" where Admin Pauses -> State Update -> Prop Update -> Code forces Pause.
+      if (isAdmin) return;
+
+      // Strict Sync for Clients
       if (playing) {
           playerRef.current.playVideo();
       } else {
           playerRef.current.pauseVideo();
       }
-  }, [playing, isPlayerReady]);
+  }, [playing, isPlayerReady, isAdmin]);
 
   // 4. Seek Detection (Polling)
   useEffect(() => {
@@ -230,22 +217,14 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
           
           try {
               const currentTime = playerRef.current.getCurrentTime();
-              // If time difference is > 2s (normal playback is ~1s per 1s), we assume seek
-              // We also need to ignore the initial startup jump
               const diff = Math.abs(currentTime - lastTime);
               
               if (diff > 1.5 && lastTime > 0) {
                   console.log(`[VideoPlayer] Detected seek: ${lastTime} -> ${currentTime}`);
-                  
-                  // SMART SEEK: If we were playing recently (< 2000ms), assume we want to keep playing.
-                  // This covers the "Drag to Seek" case where state momentarily becomes PAUSED.
-                  const wasPlayingRecently = (Date.now() - lastPlayingTime.current) < 2000;
-                  const effectivePlaying = stateRef.current.playing || wasPlayingRecently;
-                  
-                  console.log(`[VideoPlayer] Seek Heuristic: playing=${stateRef.current.playing}, recent=${wasPlayingRecently} -> effective=${effectivePlaying}`);
-                  
-                  // Pass effective state to Sync
-                  onSeek?.(currentTime, effectivePlaying);
+                  // Keep it simple: Send exact current state.
+                  // If Admin is dragging (Paused), we send Paused.
+                  // If Admin click-jumped (Playing), we send Playing.
+                  onSeek?.(currentTime, stateRef.current.playing);
               }
               
               lastTime = currentTime;
