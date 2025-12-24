@@ -99,6 +99,12 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                         if (isAdminCurrent) {
                             if (e.data === window.YT.PlayerState.PLAYING) {
                                 console.log('[VideoPlayer] Admin PLAY detected');
+                                lastPlayingTime.current = Date.now(); // Mark active play
+                                // Clear any pending pause (debounce)
+                                if (adminPauseTimeout.current) {
+                                    clearTimeout(adminPauseTimeout.current);
+                                    adminPauseTimeout.current = null;
+                                }
                                 current.onPlay?.();
                             }
                             if (e.data === window.YT.PlayerState.PAUSED) {
@@ -107,7 +113,15 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                                 if (document.visibilityState === 'hidden') {
                                     return;
                                 }
-                                current.onPause?.();
+                                
+                                // Debounce Pause: Wait 250ms to see if it's just a seek
+                                if (adminPauseTimeout.current) clearTimeout(adminPauseTimeout.current);
+                                
+                                adminPauseTimeout.current = setTimeout(() => {
+                                    console.log('[VideoPlayer] Admin PAUSE confirmed (Timeout)');
+                                    current.onPause?.();
+                                    adminPauseTimeout.current = null;
+                                }, 250);
                             }
                             if (e.data === window.YT.PlayerState.ENDED) current.onEnded?.();
                         }
@@ -185,7 +199,13 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
       };
   }, []);
 
-  /* REMOVED: adminPauseTimeout, lastPlayingTime heuristics */
+  /* Restored: adminPauseTimeout, lastPlayingTime heuristics */
+  const adminPauseTimeout = useRef(null); // Debounce admin pauses
+  const lastPlayingTime = useRef(0); // Track last play for seek heuristic
+
+  useEffect(() => {
+      if (playing) lastPlayingTime.current = Date.now();
+  }, [playing]);
 
   // ...
 
@@ -219,12 +239,18 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
               const currentTime = playerRef.current.getCurrentTime();
               const diff = Math.abs(currentTime - lastTime);
               
-              if (diff > 1.5 && lastTime > 0) {
+              if (diff > 1.2 && lastTime > 0) {
                   console.log(`[VideoPlayer] Detected seek: ${lastTime} -> ${currentTime}`);
-                  // Keep it simple: Send exact current state.
-                  // If Admin is dragging (Paused), we send Paused.
-                  // If Admin click-jumped (Playing), we send Playing.
-                  onSeek?.(currentTime, stateRef.current.playing);
+                  
+                  // SMART SEEK: If we were playing recently (< 3000ms), assume we want to keep playing.
+                  // This ensures Clients don't pause when Admin drags the seek bar.
+                  const wasPlayingRecently = (Date.now() - lastPlayingTime.current) < 3000;
+                  const effectivePlaying = stateRef.current.playing || wasPlayingRecently;
+                  
+                  console.log(`[VideoPlayer] Seek Heuristic: playing=${stateRef.current.playing}, recent=${wasPlayingRecently} -> effective=${effectivePlaying}`);
+                  
+                  // Pass effective state to Sync
+                  onSeek?.(currentTime, effectivePlaying);
               }
               
               lastTime = currentTime;
@@ -285,13 +311,25 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                   const seekPlaying = typeof payload === 'object' ? payload.playing : true; // Default to true/playing if legacy
 
                   // Seek
+                  console.log(`[VideoPlayer] Seeking to ${seekTime}, Playing: ${seekPlaying}`);
                   playerRef.current.seekTo(seekTime, true);
                   
+                  // Double-Check Seek (Retry if failed)
+                  setTimeout(() => {
+                        if (!playerRef.current || typeof playerRef.current.getCurrentTime !== 'function') return;
+                        const current = playerRef.current.getCurrentTime();
+                        if (Math.abs(current - seekTime) > 2) {
+                             console.log(`[VideoPlayer] Seek miss detected (${current} vs ${seekTime}). Retrying...`);
+                             playerRef.current.seekTo(seekTime, true);
+                        }
+                  }, 500);
+
                   // STRICT SYNC: Seek always matches Admin state
                   if (!isAdmin) {
                       if (seekPlaying) {
-                           console.log('[VideoPlayer] Seek (Playing) -> Forcing Play');
-                           ensurePlaying();
+                           console.log('[VideoPlayer] Seek (Playing) -> Forcing Play (delayed)');
+                           // Delay play command to let seekTo register
+                           setTimeout(() => ensurePlaying(), 100);
                       } else {
                            playerRef.current.pauseVideo();
                       }
