@@ -258,12 +258,11 @@ io.on('connection', (socket) => {
             leaver.inactive = true;
             
             // Set a timer to actually remove them if they don't return
+            // Reduced grace period to 2s for faster "User Left" feedback while allowing refreshes
             leaver.leaveTimer = setTimeout(() => {
                  if (!rooms[room]) return; // Room might be gone
                  
-                 // Check if user is still inactive (might have reconnected with same obj?)
-                 // Actually reconnection updates the OBJECT. But the Timer is bound to THIS closure?
-                 // We need to re-find the user in the array because the array might check "inactive".
+                 // Check if user is still inactive
                  const currentIdx = rooms[room].users.findIndex(u => u.sessionId === leaver.sessionId);
                  
                  if (currentIdx !== -1 && rooms[room].users[currentIdx].inactive) {
@@ -271,9 +270,30 @@ io.on('connection', (socket) => {
                      console.log(`User ${leaver.name} timed out. Removing.`);
                      rooms[room].users.splice(currentIdx, 1);
                      
-                     // Admin Reassignment (if needed)
-                     if (rooms[room].admin === leaver.id) { // Check against OLD id (leaver.id)
-                        rooms[room].admin = rooms[room].users[0]?.id || null;
+                     // Admin Reassignment
+                     // If the leaver was the admin, promote the next available user IMMEDIATELY
+                     if (rooms[room].admin === leaver.id) {
+                        const newAdmin = rooms[room].users.find(u => !u.inactive) || rooms[room].users[0];
+                        if (newAdmin) {
+                            rooms[room].admin = newAdmin.id;
+                            rooms[room].adminSessionId = newAdmin.sessionId;
+                            
+                            console.log(`Admin left. Promoted ${newAdmin.name} (${newAdmin.id})`);
+                            
+                            io.to(room).emit('admin_changed', { 
+                                newAdminId: newAdmin.id, 
+                                newAdminName: newAdmin.name 
+                            });
+                            
+                            io.to(room).emit('chat_message', {
+                                type: 'system',
+                                content: `Admin left. ${newAdmin.name} is now the admin.`,
+                                timestamp: new Date().toISOString()
+                            });
+                        } else {
+                            // No users left? Room will be cleaned up/admin set to null
+                            rooms[room].admin = null;
+                        }
                      }
                      
                      io.to(room).emit('user_left', { 
@@ -288,7 +308,8 @@ io.on('connection', (socket) => {
                         timestamp: new Date().toISOString()
                      });
                  }
-            }, 10000); // 10 seconds grace period
+            }, 2000); // 2 seconds grace period (fast enough for refresh, snappy for leaves)
+        }
         }
         
         // Don't emit 'user_left' yet!
