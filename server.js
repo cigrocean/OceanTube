@@ -310,7 +310,6 @@ io.on('connection', (socket) => {
                  }
             }, 2000); // 2 seconds grace period (fast enough for refresh, snappy for leaves)
         }
-        }
         
         // Don't emit 'user_left' yet!
         
