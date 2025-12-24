@@ -14,6 +14,11 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
   const [videoId, setVideoId] = useState(propVideoId || getYouTubeID(url));
   const [isPlayerReady, setIsPlayerReady] = useState(false);
   const adminPauseTimeout = useRef(null); // Debounce admin pauses
+  const lastPlayingTime = useRef(0); // Track last play for seek heuristic
+
+  useEffect(() => {
+      if (playing) lastPlayingTime.current = Date.now();
+  }, [playing]);
 
 
 
@@ -100,6 +105,7 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                         if (isAdminCurrent) {
                             if (e.data === window.YT.PlayerState.PLAYING) {
                                 console.log('[VideoPlayer] Admin PLAY detected');
+                                lastPlayingTime.current = Date.now(); // Mark active play
                                 // Clear any pending pause (debounce)
                                 if (adminPauseTimeout.current) {
                                     clearTimeout(adminPauseTimeout.current);
@@ -230,8 +236,16 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
               
               if (diff > 1.5 && lastTime > 0) {
                   console.log(`[VideoPlayer] Detected seek: ${lastTime} -> ${currentTime}`);
-                  // Pass current playing state to Sync
-                  onSeek?.(currentTime, stateRef.current.playing);
+                  
+                  // SMART SEEK: If we were playing recently (< 2000ms), assume we want to keep playing.
+                  // This covers the "Drag to Seek" case where state momentarily becomes PAUSED.
+                  const wasPlayingRecently = (Date.now() - lastPlayingTime.current) < 2000;
+                  const effectivePlaying = stateRef.current.playing || wasPlayingRecently;
+                  
+                  console.log(`[VideoPlayer] Seek Heuristic: playing=${stateRef.current.playing}, recent=${wasPlayingRecently} -> effective=${effectivePlaying}`);
+                  
+                  // Pass effective state to Sync
+                  onSeek?.(currentTime, effectivePlaying);
               }
               
               lastTime = currentTime;
@@ -261,6 +275,17 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
   useEffect(() => {
       if (!socket || !playerRef.current) return;
       
+      // Helper to forcefully ensure playback resumes
+      const ensurePlaying = () => {
+           console.log('[VideoPlayer] Enforcing Playback...');
+           playerRef.current.playVideo();
+           
+           // Retry strategy to overcome buffering/seek deadlocks
+           setTimeout(() => { if (stateRef.current.playing) playerRef.current.playVideo(); }, 200);
+           setTimeout(() => { if (stateRef.current.playing) playerRef.current.playVideo(); }, 500);
+           setTimeout(() => { if (stateRef.current.playing) playerRef.current.playVideo(); }, 1000);
+      };
+
       const onSync = ({ type, time, payload }) => {
           if (!isPlayerReady || typeof playerRef.current.seekTo !== 'function') return;
           
@@ -268,7 +293,7 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
               case 'play':
                   // STRICT SYNC: Admin Play -> Everyone Plays
                   console.log('[VideoPlayer] Admin Play Received -> Forcing Resume');
-                  playerRef.current.playVideo();
+                  ensurePlaying();
                   break;
 
               case 'pause':
@@ -287,7 +312,7 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                   if (!isAdmin) {
                       if (seekPlaying) {
                            console.log('[VideoPlayer] Seek (Playing) -> Forcing Play');
-                           setTimeout(() => playerRef.current.playVideo(), 200);
+                           ensurePlaying();
                       } else {
                            playerRef.current.pauseVideo();
                       }
@@ -309,7 +334,7 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
           
           // Strict Sync: Always match server
           if (shouldPlay) {
-               playerRef.current.playVideo();
+               ensurePlaying();
           } else {
                playerRef.current.pauseVideo();
           }
