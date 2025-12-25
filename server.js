@@ -495,7 +495,9 @@ io.on('connection', (socket) => {
     
     if (type === 'seek') {
         updateRoomTimestamp(room); // Commit current interval
-        room.timestamp = payload;  // Set new time
+        // Payload can be number or { time, playing }
+        const newTime = typeof payload === 'object' ? payload.time : payload;
+        room.timestamp = newTime;  // Set new time
         if (room.playing) {
             room.lastPlayTime = Date.now(); // Reset interval start
             startRoomTimer(roomId); // Restart timer
