@@ -4,49 +4,10 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { fileURLToPath } from 'url';
 import path from 'path';
-import ytSearch from 'yt-search';
+import { YouTube } from 'youtube-sr';
+// const ytSearch = ... removed
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const app = express();
-const server = createServer(app);
-
-// CORS configuration for production deployment
-const allowedOrigins = process.env.ALLOWED_ORIGINS 
-  ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
-  : ['http://localhost:5173'];
-
-// Apply CORS only to API routes to avoid conflict with Socket.IO
-app.use('/api', cors({
-  origin: allowedOrigins,
-  methods: ['GET', 'POST'],
-  credentials: true
-}));
-
-const io = new Server(server, {
-  cors: {
-    origin: "*", // Allow all origins for debugging
-    methods: ["GET", "POST"],
-    credentials: false // Must be false when origin is *
-  },
-  perMessageDeflate: false // Fixes random connection drops on some clients
-});
-
-// Health check endpoint for Render
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
-
-// Search Proxy Endpoint
-// Proxies requests to Piped/Invidious instances to avoid CORS issues in the browser
-// Search Proxy Endpoint
-
-
-// Search Cache: Query -> { timestamp: number, results: Array }
-const searchCache = new Map();
-const CACHE_TTL = 3600 * 1000; // 1 Hour
+// ...
 
 app.get('/api/search', async (req, res) => {
   const query = req.query.q;
@@ -65,21 +26,20 @@ app.get('/api/search', async (req, res) => {
   }
 
   try {
-      console.log(`[Search] Fetching from YouTube: "${query}"`);
-      // Use yt-search for reliable search
-      const result = await ytSearch(query);
-      const videos = result.videos.slice(0, 20);
-
+      console.log(`[Search] Fetching from YouTube (youtube-sr): "${query}"`);
+      // Use youtube-sr for faster results
+      const videos = await YouTube.search(query, { limit: 20, type: 'video' });
+      
       if (!videos || videos.length === 0) {
            return res.json([]);
       }
 
       const results = videos.map(video => ({
-          id: video.videoId,
+          id: video.id,
           title: video.title,
-          author: video.author ? video.author.name : 'Unknown',
-          thumbnail: video.thumbnail, // yt-search provides 'thumbnail'
-          duration: video.seconds // yt-search provides seconds directly
+          author: video.channel ? video.channel.name : 'Unknown',
+          thumbnail: video.thumbnail ? video.thumbnail.url : '', 
+          duration: video.duration / 1000 // youtube-sr returns ms
       }));
       
       // 2. Store in Cache
@@ -88,7 +48,7 @@ app.get('/api/search', async (req, res) => {
           results: results
       });
       
-      // Prune cache if too large (simple safeguard)
+      // Prune cache if too large
       if (searchCache.size > 1000) {
           const firstKey = searchCache.keys().next().value;
           searchCache.delete(firstKey);
@@ -423,18 +383,57 @@ io.on('connection', (socket) => {
       }
   };
 
-  const playNextVideo = (roomId) => {
+  const playNextVideo = async (roomId) => {
       const room = rooms[roomId];
       console.log(`[PlayNext] Executing for room ${roomId}. Queue length: ${room?.queue?.length}`);
       
-      if (!room || !room.queue || room.queue.length === 0) {
+      if (!room) return;
+
+      if (!room.queue || room.queue.length === 0) {
+          // --- Auto-Play / Recommendation Logic ---
+          if (room.autoPlayEnabled && room.videoId) {
+             console.log('[AutoPlay] Queue empty. Fetching recommendations...');
+             try {
+                // 1. Get info of current (just finished) video to find related
+                // We use 'youtube-sr' which is fast.
+                const currentVideo = await YouTube.getVideo(`https://youtube.com/watch?v=${room.videoId}`);
+                
+                if (currentVideo) {
+                    // 2. Search for related content (using title + "mix" or just title)
+                    const related = await YouTube.search(currentVideo.title, { limit: 10, type: 'video' });
+                    
+                    // 3. Filter out current video and duplicates
+                    const validNext = related.find(v => v.id !== room.videoId);
+                    
+                    if (validNext) {
+                         const video = {
+                             id: validNext.id,
+                             title: validNext.title,
+                             duration: validNext.duration / 1000, // ms to seconds
+                             thumbnail: validNext.thumbnail?.url,
+                             addedBy: 'Auto-Play'
+                         };
+                         
+                         room.queue.push(video);
+                         io.to(roomId).emit('chat_message', { 
+                             type: 'system', 
+                             content: `Auto-playing based on: "${currentVideo.title}"`,
+                             timestamp: new Date().toISOString()
+                         });
+                         // Recursively call to play the new video immediately
+                         return playNextVideo(roomId);
+                    }
+                }
+             } catch (err) {
+                 console.error('[AutoPlay] Failed:', err);
+             }
+          }
+          
           console.log(`[PlayNext] Queue empty. Stopping.`);
           // Playlist finished
-          if (room) {
-              room.playing = false;
-              stopRoomTimer(room);
-              io.to(roomId).emit('sync_action', { type: 'pause', sender: 'Server' });
-          }
+          room.playing = false;
+          stopRoomTimer(room);
+          io.to(roomId).emit('sync_action', { type: 'pause', sender: 'Server' });
           return;
       }
 
@@ -448,9 +447,9 @@ io.on('connection', (socket) => {
       room.playing = true;
       room.lastPlayTime = Date.now();
       
-      room.lastPlayTime = Date.now();
-      
       console.log(`[AutoPlay] Playing next: ${nextVideo.title} (${room.duration}s)`);
+      // Update room state title for future reference if needed
+      // room.currentTitle = nextVideo.title; 
 
       // Broadcast change
       io.to(roomId).emit('sync_action', { 
@@ -545,8 +544,8 @@ io.on('connection', (socket) => {
       // Let's stick to Server Authority for 'request_sync' above to ensure consistency with Timer.
   });
 
-  socket.on('chat_message', ({ roomId, message }) => {
-     // ... (unchanged)
+  socket.on('chat_message', ({ roomId, message, image }) => {
+     // ... (unchanged validation)
      const room = rooms[roomId];
      const user = room?.users.find(u => u.id === socket.id);
      
@@ -557,7 +556,14 @@ io.on('connection', (socket) => {
          }
          
          const name = user.name;
-         io.to(roomId).emit('chat_message', { userId: socket.id, name, message, timestamp: new Date().toISOString() });
+         // Broadcast image if present (Socket.IO handles large payloads automatically mostly, but compression is key on client)
+         io.to(roomId).emit('chat_message', { 
+             userId: socket.id, 
+             name, 
+             message, 
+             image, // Add image payload
+             timestamp: new Date().toISOString() 
+         });
      }
   });
 
@@ -598,9 +604,39 @@ io.on('connection', (socket) => {
           users: rooms[roomId].users,
           password: rooms[roomId].password,
           queue: rooms[roomId].queue || [],
-          admin: rooms[roomId].admin, // CRITICAL: Send admin ID so client knows if it is admin
-          adminSessionId: rooms[roomId].adminSessionId
+          admin: rooms[roomId].admin, 
+          adminSessionId: rooms[roomId].adminSessionId,
+          autoPlayEnabled: rooms[roomId].autoPlayEnabled || false
       });
+  });
+
+  socket.on('toggle_autoplay', ({ roomId }) => {
+      const room = rooms[roomId];
+      if (!room) return;
+      if (room.admin !== socket.id) return;
+      
+      room.autoPlayEnabled = !room.autoPlayEnabled;
+      
+      // Notify all
+      io.to(roomId).emit('chat_message', {
+          type: 'system',
+          content: `Admin ${room.autoPlayEnabled ? 'enabled' : 'disabled'} Auto-Play recommended mode. ✨`,
+          timestamp: new Date().toISOString()
+      });
+      
+      // Send updated state to everyone so UI updates
+      const statePayload = {
+          videoId: room.videoId,
+          playing: room.playing,
+          timestamp: room.timestamp,
+          users: room.users,
+          password: room.password,
+          queue: room.queue || [],
+          admin: room.admin,
+          adminSessionId: room.adminSessionId,
+          autoPlayEnabled: room.autoPlayEnabled
+      };
+      io.to(roomId).emit('sync_state', statePayload);
   });
 
 

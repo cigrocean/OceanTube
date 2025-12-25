@@ -3,7 +3,9 @@ import { VideoPlayer } from './VideoPlayer';
 import { VideoSearch } from './VideoSearch';
 import { useSocket } from '../hooks/useSocket';
 import { useKeepAlive } from '../hooks/useKeepAlive';
-import { Send, Users, Film, MessageSquare, MonitorPlay, Crown, Edit2, Search as SearchIcon, X, Link as LinkIcon, UserCog, Lock, Key, Share2, LogOut, Check, ListPlus, PlayCircle, ChevronUp, ChevronDown, SkipForward, Copy } from 'lucide-react';
+import { Send, Users, Film, MessageSquare, MonitorPlay, Crown, Edit2, Search as SearchIcon, X, Link as LinkIcon, UserCog, Lock, Key, Share2, LogOut, Check, ListPlus, PlayCircle, ChevronUp, ChevronDown, SkipForward, Copy, Smile, Image as ImageIcon, Paperclip, AlertTriangle, UserX, Sparkles } from 'lucide-react';
+import EmojiPicker from 'emoji-picker-react';
+import imageCompression from 'browser-image-compression';
 import QRCode from 'react-qr-code';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -97,9 +99,56 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
    // Derived state for display name
    const currentUser = users.find(u => u.id === socket?.id);
    const displayName = currentUser ? currentUser.name : effectiveUsername;
-   
    // Mobile State
    const [showMobileChat, setShowMobileChat] = useState(false);
+   
+   // Chat Enhancements State
+   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+   const [autoPlayEnabled, setAutoPlayEnabled] = useState(false);
+   const fileInputRef = useRef(null);
+
+   const onEmojiClick = (emojiObject) => {
+       setMsgInput(prev => prev + emojiObject.emoji);
+       // Keep picker open or close? User preference. Let's keep it open for multiple emojis.
+   };
+
+   const handleImageUpload = async (event) => {
+       const file = event.target.files[0];
+       if (!file) return;
+
+       // Compression Options
+       const options = {
+           maxSizeMB: 0.8, // 800KB Limit for Socket.io
+           maxWidthOrHeight: 1024,
+           useWebWorker: true
+       };
+
+       try {
+           console.log(`[ImageUpload] Original size: ${file.size / 1024 / 1024} MB`);
+           const compressedFile = await imageCompression(file, options);
+           console.log(`[ImageUpload] Compressed size: ${compressedFile.size / 1024 / 1024} MB`);
+
+           // Convert to Base64
+           const reader = new FileReader();
+           reader.readAsDataURL(compressedFile);
+           reader.onloadend = () => {
+               const base64data = reader.result;
+               // Emit
+               if (socket) {
+                   socket.emit('chat_message', {
+                       roomId, 
+                       message: '', // Empty text
+                       image: base64data 
+                   });
+                   // Close mobile keyboard/ui if needed
+               }
+           };
+       } catch (error) {
+           console.error('[ImageUpload] Compression Failed:', error);
+       }
+       // Reset input
+       if (fileInputRef.current) fileInputRef.current.value = '';
+   };
     
     // Attempt to keep browser alive efficiently
     useKeepAlive(isPlaying);
@@ -163,6 +212,7 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
         }
 
         if (state.queue) setQueue(state.queue);
+        if (state.autoPlayEnabled !== undefined) setAutoPlayEnabled(state.autoPlayEnabled);
         
         // If we receive state, checks if we are in the user list (authenticated)
         // This prevents race conditions where we get state but still need password
@@ -995,22 +1045,59 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
           background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 11000
         }}>
            <div style={{
-               background: 'var(--bg-secondary)', padding: '2rem', borderRadius: '16px', width: '90%', maxWidth: '400px',
-               border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '1.5rem',
-               boxShadow: '0 10px 25px rgba(0,0,0,0.5)'
+               background: 'rgba(20, 20, 20, 0.95)', 
+               backdropFilter: 'blur(16px)',
+               padding: '2rem', 
+               borderRadius: '24px', 
+               width: '90%', 
+               maxWidth: '420px',
+               border: '1px solid rgba(255, 255, 255, 0.1)', 
+               display: 'flex', 
+               flexDirection: 'column', 
+               gap: '1.5rem',
+               boxShadow: '0 20px 50px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05)'
            }}>
-               <h3 style={{ margin: 0, fontSize: '1.2rem', textAlign: 'center' }}>Queue Request</h3>
-               <p style={{ textAlign: 'center', color: 'var(--text-secondary)', margin: 0 }}>
-                   <strong>{pendingRequest.addedBy}</strong> wants to add:
-               </p>
+               <div style={{ textAlign: 'center' }}>
+                   <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.4rem', fontWeight: '700', letterSpacing: '-0.5px' }}>
+                     Queue Request
+                   </h3>
+                   <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '0.95rem' }}>
+                       <strong style={{ color: 'white' }}>{pendingRequest.addedBy}</strong> wants to add a video.
+                   </p>
+               </div>
                
                <div style={{ 
-                   width: '100%', aspectRatio: '16/9', background: '#000', borderRadius: '8px', 
-                   backgroundImage: `url(${pendingRequest.thumbnail})`,
-                   backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative'
+                   width: '100%', 
+                   aspectRatio: '16/9', 
+                   background: '#000', 
+                   borderRadius: '12px', 
+                   overflow: 'hidden',
+                   position: 'relative',
+                   boxShadow: '0 8px 20px rgba(0,0,0,0.4)',
+                   border: '1px solid rgba(255,255,255,0.1)'
                }}>
-                   <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.7)', color: 'white', padding: '0.5rem', fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                       {pendingRequest.title}
+                   <img 
+                       src={pendingRequest.thumbnail} 
+                       alt="Thumbnail" 
+                       style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.8 }} 
+                   />
+                   <div style={{ 
+                       position: 'absolute', bottom: 0, left: 0, right: 0, 
+                       background: 'linear-gradient(to top, rgba(0,0,0,0.9), transparent)', 
+                       padding: '1.5rem 1rem 1rem', 
+                   }}>
+                       <div style={{
+                           color: 'white', 
+                           fontWeight: '600',
+                           fontSize: '1rem', 
+                           lineHeight: '1.3',
+                           display: '-webkit-box',
+                           WebkitLineClamp: 2,
+                           WebkitBoxOrient: 'vertical',
+                           overflow: 'hidden'
+                       }}>
+                           {pendingRequest.title}
+                       </div>
                    </div>
                </div>
 
@@ -1021,9 +1108,9 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                            socket.emit('resolve_queue_request', { roomId, video: pendingRequest, approved: false });
                            setPendingRequest(null);
                        }}
-                       style={{ flex: 1, padding: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                       style={{ flex: 1, padding: '1rem', cursor: 'pointer', borderRadius: '12px', fontWeight: 'bold' }}
                    >
-                       <X size={18} /> Deny
+                       Deny
                    </button>
                    <button 
                        className="btn-primary" 
@@ -1031,9 +1118,9 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                            socket.emit('resolve_queue_request', { roomId, video: pendingRequest, approved: true });
                            setPendingRequest(null);
                        }}
-                       style={{ flex: 1, padding: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                       style={{ flex: 1, padding: '1rem', cursor: 'pointer', borderRadius: '12px', fontWeight: 'bold', background: 'var(--accent-primary)' }}
                    >
-                       <Check size={18} /> Approve
+                       Approve
                    </button>
                </div>
            </div>
@@ -1233,7 +1320,7 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                                 alignItems: 'center',
                                 gap: '0.5rem'
                               }}>
-                                ⚠️ {urlInputError}
+                                <AlertTriangle size={16} /> <span>{urlInputError}</span>
                               </div>
                             )}
                             <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
@@ -1294,6 +1381,25 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                         }}
                     >
                        <LinkIcon size={20} /> <span>Paste URL</span>
+                    </button>
+                    
+                    {/* Auto-Play Toggle */}
+                    <button 
+                         className="btn-secondary" 
+                         onClick={() => socket?.emit('toggle_autoplay', { roomId })}
+                         title={autoPlayEnabled ? "Turn Off Auto-Play" : "Turn On Auto-Play"}
+                         aria-label="Toggle auto-play recommendation mode"
+                         style={{
+                           padding: '0.6rem 1rem',
+                           display: 'flex',
+                           alignItems: 'center',
+                           gap: '0.5rem',
+                           color: autoPlayEnabled ? 'var(--accent-primary)' : 'inherit',
+                           borderColor: autoPlayEnabled ? 'var(--accent-primary)' : 'transparent',
+                           background: autoPlayEnabled ? 'rgba(99, 102, 241, 0.1)' : 'transparent'
+                         }}
+                    >
+                       <Sparkles size={20} /> <span>{autoPlayEnabled ? 'Auto-Play On' : 'Auto-Play'}</span>
                     </button>
                     
                     <div className="video-controls-separator"></div>
@@ -1484,18 +1590,39 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                            <span className="timestamp" style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginLeft: '0.5rem', marginRight: '0.5rem', opacity: 0.6 }}>
                                {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                            </span>
-                           <span className="text" style={{ wordBreak: 'break-word' }}>
-                               {(() => {
-                                   const urlRegex = /(https?:\/\/[^\s]+)/g;
-                                   const parts = msg.message.split(urlRegex);
-                                   return parts.map((part, i) => {
-                                       if (part.match(urlRegex)) {
-                                           return <a key={i} href={part} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-primary)', textDecoration: 'underline' }}>{part}</a>;
-                                       }
-                                       return part;
-                                   });
-                               })()}
-                           </span>
+                           {msg.image && (
+                               <div style={{ marginTop: '0.5rem', marginBottom: '0.25rem' }}>
+                                   <img 
+                                      src={msg.image} 
+                                      alt="User shared" 
+                                      style={{ 
+                                          maxWidth: '100%', 
+                                          maxHeight: '300px', 
+                                          borderRadius: '8px', 
+                                          cursor: 'pointer',
+                                          border: '1px solid var(--border-color)'
+                                      }} 
+                                      onClick={() => {
+                                          const w = window.open('');
+                                          w.document.write('<img src="' + msg.image + '" style="max-width:100%"/>');
+                                      }}
+                                   />
+                               </div>
+                           )}
+                           {msg.message && (
+                               <span className="text" style={{ wordBreak: 'break-word', display: 'block', marginTop: msg.image ? '0.25rem' : '0' }}>
+                                   {(() => {
+                                       const urlRegex = /(https?:\/\/[^\s]+)/g;
+                                       const parts = msg.message.split(urlRegex);
+                                       return parts.map((part, i) => {
+                                           if (part.match(urlRegex)) {
+                                               return <a key={i} href={part} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-primary)', textDecoration: 'underline' }}>{part}</a>;
+                                           }
+                                           return part;
+                                       });
+                                   })()}
+                               </span>
+                           )}
                         </>
                      ) : (
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%' }}>
@@ -1512,10 +1639,56 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
               <div ref={messagesEndRef} />
            </div>
 
-                 <form onSubmit={sendMessage} className="chat-input fa">
-                    <input type="text" placeholder="Type a message..." value={msgInput} onChange={e => setMsgInput(e.target.value)} />
-                    <button type="submit" className="btn-icon" aria-label="Send message"><Send size={18} /></button>
-                 </form>
+                 <div className="chat-input-wrapper" style={{ position: 'relative' }}>
+                     {showEmojiPicker && (
+                         <div style={{ position: 'absolute', bottom: '110%', left: '0', zIndex: 50, boxShadow: '0 4px 20px rgba(0,0,0,0.5)', borderRadius: '8px' }}>
+                             <EmojiPicker 
+                                onEmojiClick={onEmojiClick} 
+                                theme="dark" 
+                                width={300} 
+                                height={350}
+                                emojiStyle="native"
+                             />
+                         </div>
+                     )}
+                     <form onSubmit={sendMessage} className="chat-input fa" style={{ display: 'flex', gap: '8px', alignItems: 'center', background: 'var(--bg-secondary)', padding: '0.8rem', borderRadius: '0' }}>
+                        <button 
+                            type="button" 
+                            className="btn-icon" 
+                            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                            style={{ color: showEmojiPicker ? 'var(--accent-primary)' : 'var(--text-secondary)' }}
+                            title="Add Emoji"
+                        >
+                            <Smile size={20} />
+                        </button>
+                        <button 
+                            type="button" 
+                            className="btn-icon" 
+                            onClick={() => fileInputRef.current?.click()}
+                            title="Upload Image"
+                            style={{ color: 'var(--text-secondary)' }}
+                        >
+                            <ImageIcon size={20} />
+                        </button>
+                        <input 
+                            type="file" 
+                            ref={fileInputRef} 
+                            onChange={handleImageUpload} 
+                            accept="image/*" 
+                            style={{ display: 'none' }} 
+                        />
+                        
+                        <input 
+                            type="text" 
+                            placeholder="Type a message..." 
+                            value={msgInput} 
+                            onChange={e => setMsgInput(e.target.value)} 
+                            onFocus={() => setShowEmojiPicker(false)}
+                            style={{ flex: 1 }}
+                        />
+                        <button type="submit" className="btn-icon" aria-label="Send message"><Send size={18} /></button>
+                     </form>
+                 </div>
         </aside>
       </main>
       
