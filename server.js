@@ -428,35 +428,47 @@ io.on('connection', (socket) => {
           if (room.autoPlayEnabled && room.videoId) {
              console.log(`[AutoPlay] Queue empty. Last Video ID: ${room.videoId}. Fetching recommendations...`);
              try {
-                // 1. Get info of current (just finished) video to find related
+                let sourceTitle = room.currentTitle;
                 const lastVideoId = room.videoId;
-                // Use full URL for youtube-sr
-                const currentVideo = await YouTube.getVideo(`https://www.youtube.com/watch?v=${lastVideoId}`)
-                    .catch(e => {
-                        console.warn(`[AutoPlay] Failed to get video info for ${lastVideoId}: ${e.message}`);
-                        return null;
-                    });
-                
+
+                // 1. If we don't have title, try to fetch it
+                if (!sourceTitle) {
+                    console.log(`[AutoPlay] Title missing. Fetching metadata for ${lastVideoId}...`);
+                    const currentVideo = await YouTube.getVideo(`https://www.youtube.com/watch?v=${lastVideoId}`)
+                        .catch(e => {
+                            console.warn(`[AutoPlay] Failed to get video info for ${lastVideoId}: ${e.message}`);
+                            return null; 
+                        });
+                    if (currentVideo) sourceTitle = currentVideo.title;
+                }
+
                 let nextVideoToPlay = null;
 
-                if (currentVideo) {
+                if (sourceTitle) {
                     // 2. Search for related content using Title
-                    console.log(`[AutoPlay] Source Title: "${currentVideo.title}"`);
-                    const related = await YouTube.search(currentVideo.title, { limit: 12, type: 'video' });
-                    // Filter: Not the same ID
-                    const validNext = related.find(v => v.id !== lastVideoId);
+                    console.log(`[AutoPlay] Source Title: "${sourceTitle}"`);
+                    const related = await YouTube.search(sourceTitle, { limit: 12, type: 'video' })
+                         .catch(e => {
+                             console.warn(`[AutoPlay] Search failed: ${e.message}`); 
+                             return [];
+                         });
                     
-                    if (validNext) {
-                         nextVideoToPlay = {
-                             id: validNext.id,
-                             title: validNext.title,
-                             duration: validNext.duration / 1000, 
-                             thumbnail: validNext.thumbnail?.url,
-                             addedBy: 'Auto-Play 📻'
-                         };
+                    if (related && related.length > 0) {
+                        // Filter: Not the same ID
+                        const validNext = related.find(v => v.id !== lastVideoId) || related[0];
+                        
+                        if (validNext) {
+                             nextVideoToPlay = {
+                                 id: validNext.id,
+                                 title: validNext.title,
+                                 duration: validNext.duration / 1000, 
+                                 thumbnail: validNext.thumbnail?.url,
+                                 addedBy: 'Auto-Play 📻'
+                             };
+                        }
                     }
                 } else {
-                     console.log('[AutoPlay] Could not retrieve last video info. Stopping.');
+                     console.log('[AutoPlay] Could not determine source title. Stopping.');
                      io.to(roomId).emit('chat_message', { 
                          type: 'system', 
                          content: `⚠️ Auto-Play failed: unavailable video info.`,
@@ -511,8 +523,9 @@ io.on('connection', (socket) => {
       room.lastPlayTime = Date.now();
       
       console.log(`[AutoPlay] Playing next: ${nextVideo.title} (${room.duration}s)`);
-      // Update room state title for future reference if needed
-      // room.currentTitle = nextVideo.title; 
+      
+      // Update room state title so Auto-Play doesn't need to fetch it later
+      room.currentTitle = nextVideo.title; 
 
       // Broadcast change
       io.to(roomId).emit('sync_action', { 
