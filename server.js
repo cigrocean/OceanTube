@@ -811,12 +811,15 @@ io.on('connection', (socket) => {
 });
 
 
-// SPA Catch-all for non-production environments or if not caught by static middleware
-if (process.env.NODE_ENV !== 'production') {
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-  });
-}
+// Serve static files from the build directory
+app.use(express.static(path.join(__dirname, 'dist')));
+
+// SPA Catch-all: specific routes should be API, everything else is React
+app.get('*', (req, res) => {
+  // Don't intercept API routes
+  if (req.url.startsWith('/api')) return res.status(404).json({ error: 'Not Found' });
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
