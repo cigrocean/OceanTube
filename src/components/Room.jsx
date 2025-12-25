@@ -83,7 +83,7 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
 
   
   // Video State
-  const [currentVideoId, setCurrentVideoId] = useState('jfKfPfyJRdk');
+  const [currentVideoId, setCurrentVideoId] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [queue, setQueue] = useState([]); // Queue State
   const [pendingRequest, setPendingRequest] = useState(null); // Admin: Request to approve
