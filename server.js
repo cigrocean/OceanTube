@@ -417,52 +417,69 @@ io.on('connection', (socket) => {
 
   const playNextVideo = async (roomId) => {
       const room = rooms[roomId];
-      console.log(`[PlayNext] Executing for room ${roomId}. Queue length: ${room?.queue?.length}`);
+      console.log(`[PlayNext] Executing for room ${roomId}. Queue: ${room?.queue?.length}. AutoPlay: ${room?.autoPlayEnabled}`);
       
       if (!room) return;
 
       if (!room.queue || room.queue.length === 0) {
           // --- Auto-Play / Recommendation Logic ---
           if (room.autoPlayEnabled && room.videoId) {
-             console.log('[AutoPlay] Queue empty. Fetching recommendations...');
+             console.log(`[AutoPlay] Queue empty. Last Video ID: ${room.videoId}. Fetching recommendations...`);
              try {
                 // 1. Get info of current (just finished) video to find related
-                // We use 'youtube-sr' which is fast.
-                const currentVideo = await YouTube.getVideo(`https://youtube.com/watch?v=${room.videoId}`);
+                const lastVideoId = room.videoId;
+                // Use full URL for youtube-sr
+                const currentVideo = await YouTube.getVideo(`https://www.youtube.com/watch?v=${lastVideoId}`)
+                    .catch(e => {
+                        console.warn(`[AutoPlay] Failed to get video info for ${lastVideoId}: ${e.message}`);
+                        return null;
+                    });
                 
+                let nextVideoToPlay = null;
+
                 if (currentVideo) {
-                    // 2. Search for related content (using title + "mix" or just title)
-                    const related = await YouTube.search(currentVideo.title, { limit: 10, type: 'video' });
-                    
-                    // 3. Filter out current video and duplicates
-                    const validNext = related.find(v => v.id !== room.videoId);
+                    // 2. Search for related content using Title
+                    console.log(`[AutoPlay] Source Title: "${currentVideo.title}"`);
+                    const related = await YouTube.search(currentVideo.title, { limit: 12, type: 'video' });
+                    // Filter: Not the same ID, and longer than 1 min (optional heuristic)
+                    const validNext = related.find(v => v.id !== lastVideoId);
                     
                     if (validNext) {
-                         const video = {
+                         nextVideoToPlay = {
                              id: validNext.id,
                              title: validNext.title,
-                             duration: validNext.duration / 1000, // ms to seconds
+                             duration: validNext.duration / 1000, 
                              thumbnail: validNext.thumbnail?.url,
-                             addedBy: 'Auto-Play'
+                             addedBy: 'Auto-Play 📻'
                          };
-                         
-                         room.queue.push(video);
-                         io.to(roomId).emit('chat_message', { 
-                             type: 'system', 
-                             content: `Auto-playing based on: "${currentVideo.title}"`,
-                             timestamp: new Date().toISOString()
-                         });
-                         // Recursively call to play the new video immediately
-                         return playNextVideo(roomId);
                     }
+                } else {
+                     // Fallback if video info failed (e.g. video deleted): Search by random keyword or generic?
+                     // For now, just stop to avoid loops.
+                     console.log('[AutoPlay] Could not retrieve last video info. Stopping.');
                 }
+
+                if (nextVideoToPlay) {
+                     room.queue.push(nextVideoToPlay);
+                     io.to(roomId).emit('chat_message', { 
+                         type: 'system', 
+                         content: `📻 Auto-playing: "${nextVideoToPlay.title}"`,
+                         timestamp: new Date().toISOString()
+                     });
+                     
+                     // IMPORTANT: Recursive call must be awaited or just let it run.
+                     // We return here to start the cycle again immediately.
+                     return playNextVideo(roomId);
+                } else {
+                    console.log('[AutoPlay] No valid related video found.');
+                }
+
              } catch (err) {
-                 console.error('[AutoPlay] Failed:', err);
+                 console.error('[AutoPlay] Critical Error:', err);
              }
           }
           
-          console.log(`[PlayNext] Queue empty. Stopping.`);
-          // Playlist finished
+          console.log(`[PlayNext] Stopping playback (Queue empty or AutoPlay disabled).`);
           room.playing = false;
           stopRoomTimer(room);
           io.to(roomId).emit('sync_action', { type: 'pause', sender: 'Server' });
@@ -470,6 +487,7 @@ io.on('connection', (socket) => {
       }
 
       const nextVideo = room.queue.shift();
+      // ... (rest is same)
       console.log(`[PlayNext] Shifted video: ${nextVideo?.title} (${nextVideo?.id})`);
       
       room.videoId = nextVideo.id;

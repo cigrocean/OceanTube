@@ -1384,6 +1384,7 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                     </button>
                     
                     {/* Auto-Play Toggle */}
+                    {/* Auto-Play Toggle */}
                     <button 
                          className="btn-secondary" 
                          onClick={() => socket?.emit('toggle_autoplay', { roomId })}
@@ -1394,9 +1395,9 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                            display: 'flex',
                            alignItems: 'center',
                            gap: '0.5rem',
-                           color: autoPlayEnabled ? 'var(--accent-primary)' : 'inherit',
-                           borderColor: autoPlayEnabled ? 'var(--accent-primary)' : 'transparent',
-                           background: autoPlayEnabled ? 'rgba(99, 102, 241, 0.1)' : 'transparent'
+                           color: autoPlayEnabled ? 'var(--accent-primary)' : 'var(--text-primary)',
+                           borderColor: autoPlayEnabled ? 'var(--accent-primary)' : 'var(--border-color)',
+                           background: autoPlayEnabled ? 'rgba(99, 102, 241, 0.1)' : 'var(--bg-tertiary)'
                          }}
                     >
                        <Sparkles size={20} /> <span>{autoPlayEnabled ? 'Auto-Play On' : 'Auto-Play'}</span>
