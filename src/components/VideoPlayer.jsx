@@ -127,21 +127,20 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                         }
                         
                         if (!isAdminCurrent) {
-                            // Non-admin clients: Strict Sync Enforcement
-                            // Check Prop State OR Recent Seek Intent
-                            const shouldBePlaying = current.playing || 
-                                (lastSeekIntent.current.playing && (Date.now() - lastSeekIntent.current.timestamp < 5000));
+                            // Non-admin clients: Relaxed Sync
+                            // Only force play if we have a recent explicit Seek Intent (to fix buffering stuck)
+                            // Otherwise, allow user to pause freely locally.
+                            const hasRecentSeekIntent = (lastSeekIntent.current.playing && (Date.now() - lastSeekIntent.current.timestamp < 5000));
 
-                            // If we pause but the Room says we should be playing -> Force Play
-                            if (e.data === window.YT.PlayerState.PAUSED && shouldBePlaying) {
-                                console.log('[VideoPlayer] Client Paused but Room/Intent is Playing -> Forcing Resume');
+                            // If we pause but we *just* seeked-to-play -> Force Play (Fix buffering glitch)
+                            if (e.data === window.YT.PlayerState.PAUSED && hasRecentSeekIntent) {
+                                console.log('[VideoPlayer] Client Paused after Seek -> Forcing Resume (Intent)');
                                 // Small timeout to allow UI interaction but enforce rule
                                 setTimeout(() => {
                                     // Re-check recent intent (it's atomic)
-                                    const stillShouldPlay = stateRef.current.playing || 
-                                        (lastSeekIntent.current.playing && (Date.now() - lastSeekIntent.current.timestamp < 5000));
+                                    const intentValid = (lastSeekIntent.current.playing && (Date.now() - lastSeekIntent.current.timestamp < 5000));
                                         
-                                    if (stillShouldPlay) {
+                                    if (intentValid) {
                                         e.target.playVideo();
                                     }
                                 }, 100);
