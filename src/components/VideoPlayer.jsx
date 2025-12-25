@@ -146,6 +146,23 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                                 }, 100);
                             }
                         }
+                    },
+                    onError: (e) => {
+                        const current = stateRef.current;
+                        console.error('[VideoPlayer] YouTube Player Error:', e.data);
+
+                        // Specific error codes that indicate video is unavailable/invalid
+                        // 100: Video not found
+                        // 101, 150: Video not allowed to be played in an embedded player
+                        if ([100, 101, 150].includes(e.data)) {
+                            if (current.isAdmin) {
+                                console.log('[VideoPlayer] Admin: Invalid video detected, calling onEnded to skip.');
+                                current.onEnded?.(); // Trigger next video for admin
+                            } else {
+                                console.log('[VideoPlayer] User: Invalid video detected. Admin should skip.');
+                                // For users, we just log. UI might show an error message.
+                            }
+                        }
                     }
                 }
             });

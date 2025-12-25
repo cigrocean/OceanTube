@@ -638,7 +638,9 @@ io.on('connection', (socket) => {
       io.to(roomId).emit('queue_updated', rooms[roomId].queue);
       
       // Notify Chat
-      const adderName = video.addedBy || 'Admin';
+      const isToActionAdmin = (rooms[roomId].admin === socket.id);
+      const adderName = isToActionAdmin ? 'Admin' : (video.addedBy || 'User');
+      
       io.to(roomId).emit('chat_message', {
           type: 'system',
           content: `${adderName} added "${video.title}" to queue.`,
