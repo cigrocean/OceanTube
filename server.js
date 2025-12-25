@@ -446,18 +446,42 @@ io.on('connection', (socket) => {
                 let nextVideoToPlay = null;
 
                 if (sourceTitle) {
-                    // 2. Search for related content using Title
-                    console.log(`[AutoPlay] Source Title: "${sourceTitle}"`);
-                    const related = await YouTube.search(sourceTitle, { limit: 12, type: 'video' })
+                    // 2. Intelligent Search for "True Recommendations"
+                    // Clean title to remove "Official Video", "Lyrics" to find similar vibes, not just same song.
+                    let cleanTitle = sourceTitle
+                        .replace(/(\(|\[).*(\)|\])/g, '') // Remove content in brackets (often junk)
+                        .replace(/official\s+video/gi, '')
+                        .replace(/lyrics/gi, '')
+                        .replace(/ft\..*/i, '') 
+                        .trim();
+
+                    if (cleanTitle.length < 2) cleanTitle = sourceTitle; // Safety
+
+                    console.log(`[AutoPlay] Context Search: "${cleanTitle}" (Derived from: "${sourceTitle}")`);
+                    
+                    // Search with limit 15 to get variety
+                    const related = await YouTube.search(cleanTitle, { limit: 15, type: 'video' })
                          .catch(e => {
                              console.warn(`[AutoPlay] Search failed: ${e.message}`); 
                              return [];
                          });
                     
                     if (related && related.length > 0) {
-                        // Filter: Not the same ID
-                        const candidates = related.filter(v => v.id !== lastVideoId);
+                        // Filter 1: ID Check
+                        let candidates = related.filter(v => v.id !== lastVideoId);
                         
+                        // Filter 2: "Same Song" Avoidance
+                        // If not a "Mix" or "Radio", avoid result titles that effectively duplicate the query.
+                        const isMix = (t) => t.toLowerCase().includes('mix') || t.toLowerCase().includes('radio');
+                        
+                        const distinctCandidates = candidates.filter(v => {
+                            if (isMix(v.title)) return true; // Lofi users maximize similar titles
+                            return !v.title.toLowerCase().includes(cleanTitle.toLowerCase()); // Pop users minimize same titles
+                        });
+                        
+                        // Prefer distinct, but fallback if empty
+                        if (distinctCandidates.length > 0) candidates = distinctCandidates;
+
                         // Pick random from top 5 for variety
                         const poolSize = Math.min(candidates.length, 5);
                         const validNext = poolSize > 0 
