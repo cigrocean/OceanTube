@@ -128,12 +128,20 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                         
                         if (!isAdminCurrent) {
                             // Non-admin clients: Strict Sync Enforcement
+                            // Check Prop State OR Recent Seek Intent
+                            const shouldBePlaying = current.playing || 
+                                (lastSeekIntent.current.playing && (Date.now() - lastSeekIntent.current.timestamp < 5000));
+
                             // If we pause but the Room says we should be playing -> Force Play
-                            if (e.data === window.YT.PlayerState.PAUSED && current.playing) {
-                                console.log('[VideoPlayer] Client Paused but Room is Playing -> Forcing Resume');
+                            if (e.data === window.YT.PlayerState.PAUSED && shouldBePlaying) {
+                                console.log('[VideoPlayer] Client Paused but Room/Intent is Playing -> Forcing Resume');
                                 // Small timeout to allow UI interaction but enforce rule
                                 setTimeout(() => {
-                                    if (stateRef.current.playing) {
+                                    // Re-check recent intent (it's atomic)
+                                    const stillShouldPlay = stateRef.current.playing || 
+                                        (lastSeekIntent.current.playing && (Date.now() - lastSeekIntent.current.timestamp < 5000));
+                                        
+                                    if (stillShouldPlay) {
                                         e.target.playVideo();
                                     }
                                 }, 100);
@@ -202,6 +210,7 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
   /* Restored: adminPauseTimeout, lastPlayingTime heuristics */
   const adminPauseTimeout = useRef(null); // Debounce admin pauses
   const lastPlayingTime = useRef(0); // Track last play for seek heuristic
+  const lastSeekIntent = useRef({ playing: false, timestamp: 0 }); // Track forced play intent from seek
 
   useEffect(() => {
       if (playing) lastPlayingTime.current = Date.now();
@@ -247,15 +256,22 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
               if (diff > 1.2 && lastTime > 0) {
                   console.log(`[VideoPlayer] Detected seek: ${lastTime} -> ${currentTime}`);
                   
-                  // SMART SEEK: If we were playing recently (< 3000ms), assume we want to keep playing.
+                  // SMART SEEK: If we were playing recently (< 10000ms), assume we want to keep playing.
                   // This ensures Clients don't pause when Admin drags the seek bar.
-                  const wasPlayingRecently = (Date.now() - lastPlayingTime.current) < 3000;
+                  // Restored by user request for seamless jump-play.
+                  const wasPlayingRecently = (Date.now() - lastPlayingTime.current) < 10000;
                   const effectivePlaying = stateRef.current.playing || wasPlayingRecently;
                   
                   console.log(`[VideoPlayer] Seek Heuristic: playing=${stateRef.current.playing}, recent=${wasPlayingRecently} -> effective=${effectivePlaying}`);
                   
                   // Pass effective state to Sync
                   onSeek?.(currentTime, effectivePlaying);
+                  
+                  // Also force ADMIN player to resume if heuristic applies
+                  // This fixes "Admin paused on seeking" issue
+                  if (effectivePlaying) {
+                      playerRef.current.playVideo();
+                  }
               }
               
               lastTime = currentTime;
@@ -330,11 +346,30 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                   }, 500);
 
                   // STRICT SYNC: Seek always matches Admin state
+                  // Ignore local props (which might be stale) and trust the packet.
                   if (!isAdmin) {
+                      // Save intent for onStateChange fallback
+                      lastSeekIntent.current = {
+                          playing: seekPlaying,
+                          timestamp: Date.now()
+                      };
+                      
                       if (seekPlaying) {
-                           console.log('[VideoPlayer] Seek (Playing) -> Forcing Play (delayed)');
-                           // Delay play command to let seekTo register
-                           setTimeout(() => ensurePlaying(), 100);
+                           console.log('[VideoPlayer] Seek (Playing) -> Forcing Play (Robust)');
+                           
+                           // Create a "Blind Enforce" closure that trusts the packet, not the prop
+                           const robustEnforce = () => {
+                               if (playerRef.current && typeof playerRef.current.playVideo === 'function') {
+                                   playerRef.current.playVideo();
+                               }
+                           };
+                           
+                           // Trigger immediately and schedule retries to overcome buffering/race conditions
+                           robustEnforce(); 
+                           setTimeout(robustEnforce, 200);
+                           setTimeout(robustEnforce, 500);
+                           setTimeout(robustEnforce, 1000);
+                           
                       } else {
                            playerRef.current.pauseVideo();
                       }
