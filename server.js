@@ -547,7 +547,7 @@ io.on('connection', (socket) => {
 
 
   // Sync events
-  socket.on('sync_action', ({ roomId, type, payload }) => {
+  socket.on('sync_action', async ({ roomId, type, payload }) => {
     if (!rooms[roomId]) return;
     
     // Permission check
@@ -596,9 +596,22 @@ io.on('connection', (socket) => {
        room.videoId = payload;
        room.playing = true;
        room.timestamp = 0;
-       room.duration = 0; // Unknown duration for manual change
+       
+       try {
+           const videoInfo = await YouTube.getVideo(`https://www.youtube.com/watch?v=${payload}`);
+           room.duration = videoInfo.duration / 1000;
+           room.currentTitle = videoInfo.title;
+           console.log(`[Manual Play] Set title: "${room.currentTitle}", Duration: ${room.duration}s`);
+       } catch (e) {
+           console.error(`[Manual Play] Metadata fetch failed:`, e.message);
+           room.duration = 0;
+           room.currentTitle = payload;
+       }
+       
        room.lastPlayTime = Date.now();
-       io.to(roomId).emit('sync_action', { type, payload, sender: socket.id });
+       startRoomTimer(roomId);
+       io.to(roomId).emit('sync_action', { type: 'change_video', payload, sender: socket.id });
+    }
        return; 
     }
     
