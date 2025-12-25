@@ -676,6 +676,12 @@ io.on('connection', (socket) => {
           timestamp: new Date().toISOString()
       });
       
+      // If enabled and room is currently stopped (but has played before), kickstart it!
+      if (room.autoPlayEnabled && !room.playing && room.videoId) {
+          console.log(`[AutoPlay] Kickstarting playback for room ${roomId}`);
+          playNextVideo(roomId);
+      }
+      
       // Send updated state to everyone so UI updates
       const statePayload = {
           videoId: room.videoId,

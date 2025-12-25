@@ -1395,9 +1395,9 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                            display: 'flex',
                            alignItems: 'center',
                            gap: '0.5rem',
-                           color: autoPlayEnabled ? 'var(--accent-primary)' : 'var(--text-primary)',
-                           borderColor: autoPlayEnabled ? 'var(--accent-primary)' : 'var(--border-color)',
-                           background: autoPlayEnabled ? 'rgba(99, 102, 241, 0.1)' : 'var(--bg-tertiary)'
+                           color: autoPlayEnabled ? 'var(--accent-primary)' : undefined,
+                           borderColor: autoPlayEnabled ? 'var(--accent-primary)' : undefined,
+                           background: autoPlayEnabled ? 'rgba(99, 102, 241, 0.1)' : undefined
                          }}
                     >
                        <Sparkles size={20} /> <span>{autoPlayEnabled ? 'Auto-Play On' : 'Auto-Play'}</span>
