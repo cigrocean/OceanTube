@@ -204,7 +204,7 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
     };
     
   // Cleanup handled by separate effect
-  }, []); 
+  }, [videoId]); 
   
   // 2a. Handle Video ID Updates (Reuse Player)
   useEffect(() => {
