@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
+import { Music } from 'lucide-react';
 
 const getYouTubeID = (url) => {
   if (!url) return null;
@@ -37,7 +38,17 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
 
   // 2. Initialize Player - Only run if player doesn't exist
   useEffect(() => {
-    if (!videoId) return;
+    // If NO videoId, confirm destruction of any existing player
+    if (!videoId) {
+        if (playerRef.current) {
+            console.log('VideoPlayer: ID removed, destroying player');
+            try { playerRef.current.destroy(); } catch(e){}
+            playerRef.current = null;
+            setIsPlayerReady(false);
+        }
+        return;
+    }
+
     if (playerRef.current) return; // Already initialized
 
     let isMounted = true;
@@ -471,10 +482,25 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
       overflow: 'hidden',
       boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
     }}>
-      <div 
-        ref={containerRef}
-        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
-      />
+      {!videoId ? (
+          <div style={{ 
+              position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              background: 'linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-primary) 100%)',
+              color: 'var(--text-secondary)'
+          }}>
+               <div className="animate-pulse" style={{ padding: '2rem', borderRadius: '50%', background: 'rgba(255,255,255,0.03)', marginBottom: '1.5rem' }}>
+                    <Music size={64} strokeWidth={1.5} style={{ opacity: 0.6 }} />
+               </div>
+               <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 600, color: 'var(--text-primary)' }}>Waiting for DJ...</h3>
+               <p style={{ margin: '0.5rem 0 0', opacity: 0.6, fontSize: '0.95rem' }}>Queue is empty. Add a video to start!</p>
+          </div>
+      ) : (
+          <div 
+            ref={containerRef}
+            style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
+          />
+      )}
     </div>
   );
 };

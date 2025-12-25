@@ -120,8 +120,8 @@ io.on('connection', (socket) => {
       // Admin session logic (first user)
       const adminSessionId = sessionId;
       rooms[room] = { 
-        videoId: 'jfKfPfyJRdk', 
-        currentTitle: 'lofi hip hop radio - beats to relax/study to', // Initial title for Auto-Play
+        videoId: null, 
+        currentTitle: null, // No title initially
         playing: false, 
         timestamp: 0,
         users: [],
