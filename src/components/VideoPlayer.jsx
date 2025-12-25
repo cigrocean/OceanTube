@@ -264,8 +264,8 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
                   
                   console.log(`[VideoPlayer] Seek Heuristic: playing=${stateRef.current.playing}, recent=${wasPlayingRecently} -> effective=${effectivePlaying}`);
                   
-                  // Pass effective state to Sync
-                  onSeek?.(currentTime, effectivePlaying);
+                  // Pass effective state to Sync via Ref (stable)
+                  stateRef.current.onSeek?.(currentTime, effectivePlaying);
                   
                   // Also force ADMIN player to resume if heuristic applies
                   // This fixes "Admin paused on seeking" issue
@@ -279,7 +279,7 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
       }, checkInterval);
       
       return () => clearInterval(timer);
-  }, [isPlayerReady, isAdmin, onSeek]);
+  }, [isPlayerReady, isAdmin]); // Removed onSeek to prevent polling reset loop
 
   // 4. Continuous Sync for Non-Admin Clients
   useEffect(() => {
