@@ -443,7 +443,7 @@ io.on('connection', (socket) => {
                     // 2. Search for related content using Title
                     console.log(`[AutoPlay] Source Title: "${currentVideo.title}"`);
                     const related = await YouTube.search(currentVideo.title, { limit: 12, type: 'video' });
-                    // Filter: Not the same ID, and longer than 1 min (optional heuristic)
+                    // Filter: Not the same ID
                     const validNext = related.find(v => v.id !== lastVideoId);
                     
                     if (validNext) {
@@ -456,9 +456,12 @@ io.on('connection', (socket) => {
                          };
                     }
                 } else {
-                     // Fallback if video info failed (e.g. video deleted): Search by random keyword or generic?
-                     // For now, just stop to avoid loops.
                      console.log('[AutoPlay] Could not retrieve last video info. Stopping.');
+                     io.to(roomId).emit('chat_message', { 
+                         type: 'system', 
+                         content: `⚠️ Auto-Play failed: unavailable video info.`,
+                         timestamp: new Date().toISOString()
+                     });
                 }
 
                 if (nextVideoToPlay) {
@@ -469,15 +472,23 @@ io.on('connection', (socket) => {
                          timestamp: new Date().toISOString()
                      });
                      
-                     // IMPORTANT: Recursive call must be awaited or just let it run.
-                     // We return here to start the cycle again immediately.
                      return playNextVideo(roomId);
                 } else {
                     console.log('[AutoPlay] No valid related video found.');
+                     io.to(roomId).emit('chat_message', { 
+                         type: 'system', 
+                         content: `⚠️ Auto-Play failed: no related videos found.`,
+                         timestamp: new Date().toISOString()
+                     });
                 }
 
              } catch (err) {
                  console.error('[AutoPlay] Critical Error:', err);
+                 io.to(roomId).emit('chat_message', { 
+                     type: 'system', 
+                     content: `⚠️ Auto-Play Error: ${err.message}`,
+                     timestamp: new Date().toISOString()
+                 });
              }
           }
           
