@@ -196,20 +196,12 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
         }
     };
 
-    if (window.YT && window.YT.Player) {
-        initPlayer();
-    } else {
-        const interval = setInterval(() => {
-            if (window.YT && window.YT.Player) {
-                clearInterval(interval);
-                initPlayer();
-            }
-        }, 300);
-        return () => {
-            clearInterval(interval);
-            isMounted = false;
-        };
-    }
+    // Start initialization (will recurse if API not ready)
+    initPlayer();
+
+    return () => {
+        isMounted = false;
+    };
     
   // Cleanup handled by separate effect
   }, []); 
@@ -500,13 +492,14 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
               background: 'linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-primary) 100%)',
               color: 'var(--text-secondary)',
-              padding: '1rem'
+              padding: '0.5rem',
+              boxSizing: 'border-box'
           }}>
-               <div className="animate-pulse" style={{ padding: '1.5rem', borderRadius: '50%', background: 'rgba(255,255,255,0.03)', marginBottom: '1rem' }}>
-                    <Music size={48} strokeWidth={1.5} style={{ opacity: 0.6 }} />
+               <div className="animate-pulse" style={{ padding: '1rem', borderRadius: '50%', background: 'rgba(255,255,255,0.03)', marginBottom: '0.75rem' }}>
+                    <Music size={40} strokeWidth={1.5} style={{ opacity: 0.6 }} />
                </div>
-               <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600, color: 'var(--text-primary)', textAlign: 'center' }}>Waiting for DJ...</h3>
-               <p style={{ margin: '0.5rem 0 0', opacity: 0.6, fontSize: '0.9rem', textAlign: 'center' }}>Queue is empty.</p>
+               <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)', textAlign: 'center' }}>Waiting for DJ...</h3>
+               <p style={{ margin: '0.25rem 0 0', opacity: 0.6, fontSize: '0.85rem', textAlign: 'center', maxWidth: '80%' }}>Queue is empty.</p>
           </div>
       ) : (
           <div 
