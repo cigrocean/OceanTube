@@ -361,15 +361,17 @@ io.on('connection', (socket) => {
       const remainingSeconds = room.duration - room.timestamp;
       
       // Buffer of 2 seconds to ensure clients finish first
-      const timeoutMs = (remainingSeconds + 2) * 1000;
+      // Buffer of 2 seconds to ensure clients finish first
+      let timeoutMs = (remainingSeconds + 2) * 1000;
       
-      if (timeoutMs > 0) {
-          console.log(`[AutoPlay] Timer set for room ${roomId} in ${Math.round(remainingSeconds)}s`);
-          room.timer = setTimeout(() => {
-              console.log(`[AutoPlay] Timer fired for room ${roomId}`);
-              playNextVideo(roomId);
-          }, timeoutMs);
-      }
+      // Ensure we fire even if late
+      if (timeoutMs < 100) timeoutMs = 100;
+
+      console.log(`[AutoPlay] Timer set for room ${roomId} in ${Math.round(timeoutMs/1000)}s`);
+      room.timer = setTimeout(() => {
+          console.log(`[AutoPlay] Timer fired for room ${roomId}`);
+          playNextVideo(roomId);
+      }, timeoutMs);
       
       // Start Heartbeat
       startHeartbeat(roomId);
