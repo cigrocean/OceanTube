@@ -234,52 +234,68 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
       }
   }, [playing, isPlayerReady, isAdmin]);
 
-  // 4. Seek Detection (Polling)
+  // 4. Seek Detection (Polling Analysis)
   useEffect(() => {
+      // Must have player, be admin, and be ready
       if (!isPlayerReady || !playerRef.current || !isAdmin) return;
       
-      const checkInterval = 1000;
-      let lastTime = 0;
+      const checkInterval = 200; // Check 5 times per second for responsiveness
+      let lastVideoTime = -1;
+      let lastWallTime = 0;
       
       const timer = setInterval(() => {
           if (!playerRef.current || typeof playerRef.current.getCurrentTime !== 'function') return;
           
           try {
-              const currentTime = playerRef.current.getCurrentTime();
-              // Update lastPlayingTime if normal playback allows us to know we are playing
-              // This is crucial because "onStateChange" PLAYING event only fires once at start.
-              // Without this, the heuristic (Date.now() - lastPlayingTime < 3000) expires after 3s of playback.
-              if (diff > 0 && diff < 1.0) {
+              const currentVideoTime = playerRef.current.getCurrentTime();
+              const currentWallTime = Date.now();
+              
+              // Initialization phase
+              if (lastVideoTime === -1) {
+                  lastVideoTime = currentVideoTime;
+                  lastWallTime = currentWallTime;
+                  return;
+              }
+
+              const deltaVideo = Math.abs(currentVideoTime - lastVideoTime);
+              const deltaWall = (currentWallTime - lastWallTime) / 1000; // ms to seconds
+              const drift = Math.abs(deltaVideo - deltaWall);
+              
+              // PLAYBACK DETECTION:
+              // If video advanced roughly same as wall clock (allow SMALL drift/jitter of 0.5s)
+              // AND we actually moved forward > 0
+              if (deltaVideo > 0 && drift < 0.5) {
                    lastPlayingTime.current = Date.now();
               }
 
-              if (diff > 1.2 && lastTime > 0) {
-                  console.log(`[VideoPlayer] Detected seek: ${lastTime} -> ${currentTime}`);
+              // SEEK DETECTION via DRIFT:
+              // If video jumped significantly more (or less) than wall clock 
+              // Threshold 1.0s handles both "Jump Forward" and "Rewind"
+              // Also ensures standard lag (drift < 0.5) isn't flagged
+              if (drift > 1.0) {
+                  console.log(`[VideoPlayer] Seek Detected via Drift: Video=${deltaVideo.toFixed(2)}s, Wall=${deltaWall.toFixed(2)}s, Drift=${drift.toFixed(2)}s`);
+                  console.log(`[VideoPlayer] Jump detected: ${lastVideoTime} -> ${currentVideoTime}`);
                   
-                  // SMART SEEK: If we were playing recently (< 10000ms), assume we want to keep playing.
-                  // This ensures Clients don't pause when Admin drags the seek bar.
-                  // Restored by user request for seamless jump-play.
+                  // SMART SEEK: Heuristic logic
                   const wasPlayingRecently = (Date.now() - lastPlayingTime.current) < 10000;
                   const effectivePlaying = stateRef.current.playing || wasPlayingRecently;
                   
-                  console.log(`[VideoPlayer] Seek Heuristic: playing=${stateRef.current.playing}, recent=${wasPlayingRecently} -> effective=${effectivePlaying}`);
-                  
                   // Pass effective state to Sync via Ref (stable)
-                  stateRef.current.onSeek?.(currentTime, effectivePlaying);
+                  stateRef.current.onSeek?.(currentVideoTime, effectivePlaying);
                   
-                  // Also force ADMIN player to resume if heuristic applies
-                  // This fixes "Admin paused on seeking" issue
+                  // Force ADMIN player to resume if heuristic applies
                   if (effectivePlaying) {
                       playerRef.current.playVideo();
                   }
               }
               
-              lastTime = currentTime;
+              lastVideoTime = currentVideoTime;
+              lastWallTime = currentWallTime;
           } catch (e) {}
       }, checkInterval);
       
       return () => clearInterval(timer);
-  }, [isPlayerReady, isAdmin]); // Removed onSeek to prevent polling reset loop
+  }, [isPlayerReady, isAdmin, videoId]); // Reset on videoID change to prevent detecting new video start as seek
 
   // 4. Continuous Sync for Non-Admin Clients
   useEffect(() => {
