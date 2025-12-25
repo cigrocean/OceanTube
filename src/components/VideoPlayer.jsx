@@ -406,7 +406,13 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
           
           // Strict Sync: Always match server
           if (shouldPlay) {
-               ensurePlaying();
+               // ONLY force play if we have a recent explicit Seek/Play intent.
+               // If the user manually paused, the Heartbeat should NOT force resume.
+               // This fixes "Client pauses but auto-resumes" issue.
+               const intentValid = (lastSeekIntent.current.playing && (Date.now() - lastSeekIntent.current.timestamp < 5000));
+               if (intentValid) {
+                   ensurePlaying();
+               }
           } else {
                playerRef.current.pauseVideo();
           }
