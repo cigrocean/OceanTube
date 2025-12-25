@@ -5,9 +5,41 @@ import { Server } from 'socket.io';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import { YouTube } from 'youtube-sr';
-// const ytSearch = ... removed
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-// ...
+const app = express();
+const server = createServer(app);
+
+// CORS configuration for production deployment
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+  : ['http://localhost:5173'];
+
+// Apply CORS only to API routes to avoid conflict with Socket.IO
+app.use('/api', cors({
+  origin: allowedOrigins,
+  methods: ['GET', 'POST'],
+  credentials: true
+}));
+
+const io = new Server(server, {
+  cors: {
+    origin: "*", // Allow all origins for debugging
+    methods: ["GET", "POST"],
+    credentials: false // Must be false when origin is *
+  },
+  perMessageDeflate: false // Fixes random connection drops on some clients
+});
+
+// Health check endpoint for Render
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Search Cache: Query -> { timestamp: number, results: Array }
+const searchCache = new Map();
+const CACHE_TTL = 3600 * 1000; // 1 Hour
 
 app.get('/api/search', async (req, res) => {
   const query = req.query.q;
