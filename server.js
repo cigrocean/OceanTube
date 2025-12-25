@@ -612,10 +612,8 @@ io.on('connection', (socket) => {
        startRoomTimer(roomId);
        io.to(roomId).emit('sync_action', { type: 'change_video', payload, sender: socket.id });
     }
-       return; 
-    }
     
-    // Broadcast
+    // Broadcast other actions normally if any (like change_video is handled elsewhere)
     socket.to(roomId).emit('sync_action', { type, payload, sender: socket.id });
   });
 
