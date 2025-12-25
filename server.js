@@ -595,7 +595,9 @@ io.on('connection', (socket) => {
           timestamp: rooms[roomId].timestamp,
           users: rooms[roomId].users,
           password: rooms[roomId].password,
-          queue: rooms[roomId].queue || [] 
+          queue: rooms[roomId].queue || [],
+          admin: rooms[roomId].admin, // CRITICAL: Send admin ID so client knows if it is admin
+          adminSessionId: rooms[roomId].adminSessionId
       });
   });
 
