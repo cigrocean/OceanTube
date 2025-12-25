@@ -237,8 +237,13 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
           
           try {
               const currentTime = playerRef.current.getCurrentTime();
-              const diff = Math.abs(currentTime - lastTime);
-              
+              // Update lastPlayingTime if normal playback allows us to know we are playing
+              // This is crucial because "onStateChange" PLAYING event only fires once at start.
+              // Without this, the heuristic (Date.now() - lastPlayingTime < 3000) expires after 3s of playback.
+              if (diff > 0 && diff < 1.0) {
+                   lastPlayingTime.current = Date.now();
+              }
+
               if (diff > 1.2 && lastTime > 0) {
                   console.log(`[VideoPlayer] Detected seek: ${lastTime} -> ${currentTime}`);
                   
