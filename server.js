@@ -121,6 +121,7 @@ io.on('connection', (socket) => {
       const adminSessionId = sessionId;
       rooms[room] = { 
         videoId: 'jfKfPfyJRdk', 
+        currentTitle: 'lofi hip hop radio - beats to relax/study to', // Initial title for Auto-Play
         playing: false, 
         timestamp: 0,
         users: [],
@@ -735,12 +736,12 @@ io.on('connection', (socket) => {
       if (!video.duration || !video.title) {
           try {
               console.log(`[Queue] Fetching metadata for ${video.id || 'unknown ID'}`);
-              const result = await ytSearch({ videoId: video.id });
+              const result = await YouTube.getVideo(`https://www.youtube.com/watch?v=${video.id}`);
               if (result) {
                   video.title = video.title || result.title;
-                  video.duration = result.seconds;
-                  video.thumbnail = video.thumbnail || result.thumbnail;
-                  video.author = result.author ? result.author.name : 'Unknown';
+                  video.duration = result.duration / 1000; // youtube-sr returns ms
+                  video.thumbnail = video.thumbnail || result.thumbnail?.url;
+                  video.author = result.channel ? result.channel.name : 'Unknown';
                   console.log(`[Queue] Fetched duration: ${video.duration}s`);
               }
           } catch (err) {
