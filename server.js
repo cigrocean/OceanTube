@@ -456,7 +456,13 @@ io.on('connection', (socket) => {
                     
                     if (related && related.length > 0) {
                         // Filter: Not the same ID
-                        const validNext = related.find(v => v.id !== lastVideoId) || related[0];
+                        const candidates = related.filter(v => v.id !== lastVideoId);
+                        
+                        // Pick random from top 5 for variety
+                        const poolSize = Math.min(candidates.length, 5);
+                        const validNext = poolSize > 0 
+                            ? candidates[Math.floor(Math.random() * poolSize)] 
+                            : null;
                         
                         if (validNext) {
                              nextVideoToPlay = {
