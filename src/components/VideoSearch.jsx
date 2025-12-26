@@ -14,12 +14,17 @@ function VideoSkeleton() {
     );
 }
 
-export function VideoSearch({ onSelect, onClose, initialQuery = '', initialResults = [], onQueryChange, onResultsChange }) {
+// ... (imports remain)
+
+export function VideoSearch({ onSelect, onClose, initialQuery = '', initialResults = [], onQueryChange, onResultsChange, currentVideoId }) {
   const [query, setQuery] = useState(initialQuery);
   const [allResults, setAllResults] = useState(initialResults); // Full fetched list
   const [displayedResults, setDisplayedResults] = useState(initialResults.slice(0, 10)); // Visible list
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  
+  // Interaction State
+  const [processingId, setProcessingId] = useState(null);
   
   // Infinity Scroll
   const loadMoreRef = useRef(null);
@@ -27,6 +32,25 @@ export function VideoSearch({ onSelect, onClose, initialQuery = '', initialResul
 
   // Batch size for "Infinite" simulation
   const BATCH_SIZE = 10;
+
+  // Clear processing if the video actually starts playing (Immediate Success Feedback)
+  useEffect(() => {
+      if (currentVideoId && processingId === currentVideoId) {
+          setProcessingId(null);
+      }
+  }, [currentVideoId, processingId]);
+
+  const handleSelect = (video) => {
+      if (processingId) return; // Prevent spamming while any action is pending
+      
+      setProcessingId(video.id);
+      onSelect(video);
+      
+      // Safety reset after 3 seconds (in case it was just "Add to Queue" or server lag)
+      setTimeout(() => {
+          setProcessingId(prev => (prev === video.id ? null : prev));
+      }, 3000);
+  };
 
   const handleSearch = async (e) => {
     e.preventDefault();
@@ -135,11 +159,26 @@ export function VideoSearch({ onSelect, onClose, initialQuery = '', initialResul
                 // Show Skeletons while loading
                 ? Array(8).fill(0).map((_, i) => <VideoSkeleton key={i} />)
                 : displayedResults.map((video) => (
-                  <div key={video.id} className="video-card" onClick={() => onSelect(video)}>
+                  <div 
+                    key={video.id} 
+                    className="video-card" 
+                    onClick={() => handleSelect(video)}
+                    style={{ 
+                        cursor: processingId ? 'not-allowed' : 'pointer',
+                        opacity: processingId && processingId !== video.id ? 0.5 : 1,
+                        pointerEvents: processingId ? 'none' : 'auto'
+                    }}
+                  >
                     <div className="thumbnail-wrapper">
                       <img src={video.thumbnail} alt={video.title} loading="lazy" />
-                      <span className="duration">{formatDuration(video.duration)}</span>
-                      <div className="play-overlay"><Play size={32} fill="white" stroke="white" /></div>
+                      <span className="duration">{formatDuration(video.duration / 1000)}</span>
+                      {processingId === video.id ? (
+                        <div className="play-overlay" style={{background: 'rgba(0,0,0,0.6)', opacity: 1}}>
+                            <Loader2 size={32} className="animate-spin" color="var(--accent-primary)" />
+                        </div>
+                      ) : (
+                        <div className="play-overlay"><Play size={32} fill="white" stroke="white" /></div>
+                      )}
                     </div>
                     <div className="video-info">
                       <div className="video-title" title={video.title}>{video.title}</div>

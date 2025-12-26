@@ -88,6 +88,20 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
   const [queue, setQueue] = useState([]); // Queue State
   const [pendingRequest, setPendingRequest] = useState(null); // Admin: Request to approve
   const [activeTab, setActiveTab] = useState('chat'); // 'chat' or 'queue'
+  const [isSkipping, setIsSkipping] = useState(false); // Skip loading state
+
+  // Reset skipping state when video changes
+  useEffect(() => {
+    setIsSkipping(false);
+  }, [currentVideoId]);
+
+  const handleSkip = () => {
+    if (isSkipping) return;
+    setIsSkipping(true);
+    socket?.emit('play_next', { roomId });
+    // Safety timeout: Reset after 3s if server doesn't respond
+    setTimeout(() => setIsSkipping(false), 3000);
+  };
   
   const messagesEndRef = useRef(null);
   const userListRef = useRef(null);
@@ -1440,21 +1454,22 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                     {/* Skip Button */}
                     <button 
                        className="btn-secondary" 
-                       onClick={() => socket?.emit('play_next', { roomId })}
-                       disabled={queue.length === 0 && !autoPlayEnabled}
-                       title={queue.length > 0 ? 'Skip to next video' : (autoPlayEnabled ? 'Skip to recommendation' : 'Queue is empty')}
-                       aria-label={queue.length > 0 ? 'Skip to next video' : (autoPlayEnabled ? 'Skip to recommendation' : 'Skip disabled')}
+                       onClick={handleSkip}
+                       disabled={(!currentVideoId) || (queue.length === 0 && !autoPlayEnabled) || isSkipping}
+                       title={isSkipping ? 'Skipping...' : (queue.length > 0 ? 'Skip to next video' : (autoPlayEnabled ? 'Skip to recommendation' : 'Queue is empty'))}
+                       aria-label={isSkipping ? 'Skipping video' : 'Skip video'}
                        style={{ 
                          padding: '0.6rem 1rem', 
                          display: 'flex', 
                          alignItems: 'center', 
                          justifyContent: 'center',
                          gap: '0.5rem',
-                         opacity: (queue.length === 0 && !autoPlayEnabled) ? 0.5 : 1,
-                         cursor: (queue.length === 0 && !autoPlayEnabled) ? 'not-allowed' : 'pointer'
+                         opacity: ((!currentVideoId) || (queue.length === 0 && !autoPlayEnabled) || isSkipping) ? 0.5 : 1,
+                         cursor: ((!currentVideoId) || (queue.length === 0 && !autoPlayEnabled) || isSkipping) ? 'not-allowed' : 'pointer',
+                         minWidth: '90px'
                        }}
                     >
-                      <SkipForward size={20} /> <span>Skip</span>
+                      {isSkipping ? <Loader2 size={20} className="animate-spin" /> : <SkipForward size={20} />} <span>{isSkipping ? 'Wait' : 'Skip'}</span>
                     </button>
                  </div>
                 ) : (
@@ -1538,6 +1553,7 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                initialResults={searchResults}
                onQueryChange={setSearchQuery}
                onResultsChange={setSearchResults}
+               currentVideoId={currentVideoId}
              />
            )}
 
