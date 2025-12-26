@@ -148,6 +148,14 @@ app.use(express.static(path.join(__dirname, 'dist'), {
   }
 }));
 
+// Helper to sanitize user object (remove timers/circular refs)
+const sanitizeUser = (u) => ({ 
+    id: u.id, 
+    name: u.name, 
+    sessionId: u.sessionId, 
+    inactive: u.inactive 
+});
+
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {
   app.get('*', (req, res) => {
@@ -272,13 +280,13 @@ io.on('connection', (socket) => {
     
     // If it's a new user, broadcast join. If existing (reconnect), broadcast update.
     if (existingUserIndex === -1) {
-         io.to(roomId).emit('user_joined', { user: userToEmit, count: rooms[roomId].users.length, admin: rooms[roomId].admin });
+         io.to(roomId).emit('user_joined', { user: sanitizeUser(userToEmit), count: rooms[roomId].users.length, admin: rooms[roomId].admin });
     } else {
-         io.to(roomId).emit('user_updated', userToEmit);
+         io.to(roomId).emit('user_updated', sanitizeUser(userToEmit));
     }
     
     // Send full state to the new/reconnecting user so they know if they are admin, current video, etc.
-    socket.emit('sync_state', rooms[roomId]);
+    socket.emit('sync_state', { ...rooms[roomId], users: rooms[roomId].users.map(sanitizeUser) });
   });
 
   socket.on('update_name', ({ roomId, name }) => {
@@ -286,9 +294,9 @@ io.on('connection', (socket) => {
      const user = rooms[roomId].users.find(u => u.id === socket.id);
      if (user) {
          user.name = name;
-         io.to(roomId).emit('user_updated', user);
+         io.to(roomId).emit('user_updated', sanitizeUser(user));
          // Also resend full list just in case is easier for clients
-         io.to(roomId).emit('sync_state', rooms[roomId]); // Or just rely on user_updated
+         io.to(roomId).emit('sync_state', { ...rooms[roomId], users: rooms[roomId].users.map(sanitizeUser) }); // Or just rely on user_updated
      }
   });
 
@@ -917,7 +925,7 @@ io.on('connection', (socket) => {
           videoId: rooms[roomId].videoId,
           playing: rooms[roomId].playing,
           timestamp: rooms[roomId].timestamp,
-          users: rooms[roomId].users,
+          users: rooms[roomId].users.map(sanitizeUser),
           password: rooms[roomId].password,
           queue: rooms[roomId].queue || [],
           admin: rooms[roomId].admin, 
