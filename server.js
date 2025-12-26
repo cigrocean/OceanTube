@@ -53,6 +53,40 @@ const CACHE_TTL = 3600 * 1000; // 1 Hour
 // Room state: { roomId: { videoId, playing, sentiment, users: [{id, name, sessionId}], admin: string, adminSessionId: string } }
 const rooms = {};
 
+// Active Rooms Endpoint (Moved to top)
+app.get('/api/active-rooms', (req, res) => {
+  console.log('[API] User hit /api/active-rooms');
+  res.set('Cache-Control', 'no-store');
+  try {
+      if (!rooms) return res.json([]);
+      
+      const activeRooms = Object.keys(rooms)
+        .map(roomId => {
+            const room = rooms[roomId];
+            if (!room || !room.users) return null;
+            
+            const adminUser = room.users.find(u => u.id === room.admin);
+            const adminName = adminUser ? adminUser.name : 'Unknown Host';
+            
+            return {
+                id: roomId,
+                userCount: room.users.length,
+                adminName: adminName,
+                currentTitle: room.currentTitle,
+                playing: room.playing,
+                isPrivate: !!room.password
+            };
+        })
+        .filter(r => r && r.userCount > 0)
+        .sort((a, b) => b.userCount - a.userCount);
+        
+      res.json(activeRooms);
+  } catch (err) {
+      console.error('[API Error] /api/rooms failed:', err);
+      res.status(500).json({ error: 'Internal Server Error' }); 
+  }
+});
+
 app.get('/api/search', async (req, res) => {
   const query = req.query.q;
   if (!query) return res.status(400).json({ error: 'Missing query' });
@@ -105,42 +139,7 @@ app.get('/api/search', async (req, res) => {
 
 // Helper to parse "MM:SS" or "HH:MM:SS" to seconds
 
-// Active Rooms Endpoint
-// Active Rooms Endpoint
-// Active Rooms Endpoint
-app.get('/api/active-rooms', (req, res) => {
-  console.log('[API] User hit /api/active-rooms');
-  res.set('Cache-Control', 'no-store');
-  try {
-      if (!rooms) return res.json([]);
-      
-      const activeRooms = Object.keys(rooms)
-        .map(roomId => {
-            const room = rooms[roomId];
-            if (!room || !room.users) return null;
-            
-            // Calculate dynamic admin name (in case admin left/changed)
-            const adminUser = room.users.find(u => u.id === room.admin);
-            const adminName = adminUser ? adminUser.name : 'Unknown Host';
-            
-            return {
-                id: roomId,
-                userCount: room.users.length,
-                adminName: adminName,
-                currentTitle: room.currentTitle,
-                playing: room.playing,
-                isPrivate: !!room.password
-            };
-        })
-        .filter(r => r && r.userCount > 0)
-        .sort((a, b) => b.userCount - a.userCount);
-        
-      res.json(activeRooms);
-  } catch (err) {
-      console.error('[API Error] /api/rooms failed:', err);
-      res.status(500).json({ error: 'Internal Server Error' }); 
-  }
-});
+
 app.use(express.static(path.join(__dirname, 'dist'), {
   setHeaders: (res, path) => {
     res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
