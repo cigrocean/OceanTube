@@ -1,4 +1,5 @@
 import express from 'express';
+console.log('Server process starting...');
 import cors from 'cors';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
@@ -1097,6 +1098,6 @@ app.get('*', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
 });
