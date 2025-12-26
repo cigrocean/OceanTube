@@ -219,8 +219,20 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
           playerRef.current.loadVideoById(videoId);
           if (playing) {
               setTimeout(() => {
-                 playerRef.current?.playVideo();
-              }, 150); // Small delay to ensure load transition
+                 // Aggressive play enforcement
+                 if (playerRef.current && typeof playerRef.current.playVideo === 'function') {
+                    console.log('[VideoPlayer] Force Play (Auto-Play Trigger 1)');
+                    playerRef.current.playVideo();
+                 }
+              }, 300); 
+
+              setTimeout(() => {
+                 // Redundancy check
+                 if (playerRef.current && playerRef.current.getPlayerState() !== 1) {
+                    console.log('[VideoPlayer] Force Play (Auto-Play Trigger 2)');
+                    playerRef.current.playVideo();
+                 }
+              }, 800);
           }
       } catch(e) {
           console.error('[VideoPlayer] Error loading video:', e);

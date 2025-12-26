@@ -129,6 +129,7 @@ io.on('connection', (socket) => {
         adminSessionId: adminSessionId,
         password: password || null, // Set initial password if provided
         queue: [], // Video Queue
+        playHistory: [], // Avoid repeats
         nextRecommendation: null, // Buffered Next Video
         autoPlayEnabled: true // Default ON
       };
@@ -421,82 +422,100 @@ io.on('connection', (socket) => {
   };
 
 // Helper: true recommendation engine
-  const fetchBestRecommendation = async (sourceTitle, lastVideoId, currentArtist) => {
-      // Clean title to remove "Official Video", "Lyrics" to find similar vibes, not just same song.
+  const fetchBestRecommendation = async (sourceTitle, lastVideoId, currentArtist, playHistory = []) => {
+      // 1. Clean Title
       let cleanTitle = sourceTitle
-          .replace(/(\(|\[).*(\)|\])/g, '') // Remove content in brackets (often junk)
+          .replace(/(\(|\[).*(\)|\])/g, '')
           .replace(/official\s+video/gi, '')
           .replace(/lyrics/gi, '')
           .replace(/ft\..*/i, '') 
           .trim();
+      if (cleanTitle.length < 2) cleanTitle = sourceTitle;
 
-      if (cleanTitle.length < 2) cleanTitle = sourceTitle; // Safety
+      // 2. Tokenizer Helper
+      const getTokens = (str) => str.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter(t => t.length > 2);
+      const cleanTokens = getTokens(cleanTitle);
 
-      // Search with limit 15 to get variety
-      const isMix = (t) => t.toLowerCase().includes('mix') || t.toLowerCase().includes('radio');
-      
-      // Search Strategy: Tiered Fallback to GUARANTEE results
+      // 3. Search Strategy: "Artist Radio" priority
+      const searchOptions = { limit: 25, type: 'video' };
       let related = [];
-      const searchOptions = { limit: 20, type: 'video' };
       
       try {
-          // Tier 1: "Similar Songs" (Discovery Mode)
-          let query = isMix(cleanTitle) ? cleanTitle : `${cleanTitle} similar songs`;
-          console.log(`[RecEngine] Tier 1 Search: "${query}"`);
-          related = await YouTube.search(query, searchOptions);
+          if (currentArtist) {
+               // Strategy A: Artist Mix (Best for "Radio" feel)
+               // Randomize query to get fresh results to avoid Bubble
+               const scenarios = [
+                   `${currentArtist} mix`,
+                   `${currentArtist} radio`,
+                   `songs like ${cleanTitle}`,
+                   `${cleanTitle}`
+               ];
+               const query = scenarios[Math.floor(Math.random() * scenarios.length)];
+               console.log(`[RecEngine] Searching (Strategy A): "${query}"`);
+               related = await YouTube.search(query, searchOptions);
+          }
           
-          // Tier 2: Clean Title (Broad Mode)
           if (!related || related.length === 0) {
-               console.log(`[RecEngine] Tier 1 empty. Retry Tier 2: "${cleanTitle}"`);
+               // Strategy B: Title based (Fallback)
+               console.log(`[RecEngine] Searching (Strategy B): "${cleanTitle}"`);
                related = await YouTube.search(cleanTitle, searchOptions);
           }
-          
-          // Tier 3: Source Title (Panic Mode)
-          if (!related || related.length === 0) {
-               console.log(`[RecEngine] Tier 2 empty. Retry Tier 3: "${sourceTitle}"`);
-               related = await YouTube.search(sourceTitle, searchOptions);
-          }
       } catch (e) {
-           console.warn(`[RecEngine] Search System Error: ${e.message}`);
+           console.warn(`[RecEngine] Search Error: ${e.message}`);
       }
       
       if (related && related.length > 0) {
-          // Filter 1: ID Check
-          let candidates = related.filter(v => v.id !== lastVideoId);
-          
-          // Filter 2: Smart Recommendation (Variety)
-          const distinctCandidates = candidates.filter(v => {
-              if (isMix(v.title)) return true; // Lofi/Mixes: Allow anything similar
+          // Filter 1: History & ID Check
+          const distinctCandidates = related.filter(v => {
+              if (v.id === lastVideoId) return false;
+              if (playHistory.some(h => h.id === v.id)) return false; // Already played
               
-              // Tokenize for strict comparison
-              const getTokens = (str) => str.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter(t => t.length > 2);
-              const cleanTokens = getTokens(cleanTitle);
+              // Filter 2: Content Check
               const vTokens = getTokens(v.title);
               
-              // 1. Strict Title Check
-              // Calculate overlap of meaningful words
+              // A. Strict History Check (Antibody against repeats)
+              // Reject if title is too similar to ANY recently played song
+              const historyConflict = playHistory.some(h => {
+                  const hTokens = getTokens(h.title);
+                  const intersection = vTokens.filter(t => hTokens.includes(t));
+                  const overlap = intersection.length / Math.min(vTokens.length, hTokens.length || 1);
+                  return overlap > 0.6; // Reject if >60% match with history
+              });
+              if (historyConflict) return false;
+
+              // B. "Same Song" Check (Current Context)
               const intersection = vTokens.filter(t => cleanTokens.includes(t));
               const overlap = intersection.length / Math.min(vTokens.length, cleanTokens.length || 1);
+              if (overlap > 0.6) return false; // Reject "Lyrics", "Remix" of SAME song
               
-              // Reject if > 50% overlap (e.g. "Girls Like You" vs "Girls Like You Lyrics")
-              if (overlap > 0.5) return false;
-              
-              // 2. Strict Artist Check
-              // Reject if ANY main artist name word matches (e.g. "Maroon" matches "Maroon 5")
+              // C. Artist Check (Prevent back-to-back same artist)
               if (currentArtist && v.channel) {
                   const a1 = getTokens(currentArtist);
                   const a2 = getTokens(v.channel.name);
                   const artistOverlap = a1.filter(t => a2.includes(t)).length;
                   if (artistOverlap > 0 && a1.length > 0) return false; 
               }
-              
+
               return true;
           });
           
-          // Prefer distinct, but fallback if empty
-          if (distinctCandidates.length > 0) candidates = distinctCandidates;
+          let candidates = distinctCandidates;
+          
+          // Fallback: If we filtered too much (e.g. only same artist left), relax Artist Check
+          if (candidates.length === 0) {
+               console.log('[RecEngine] Strict filters removed all. Relaxing Artist Check...');
+               candidates = related.filter(v => {
+                   if (v.id === lastVideoId) return false;
+                   if (playHistory.some(h => h.id === v.id)) return false;
+                   
+                   const vTokens = getTokens(v.title);
+                   const intersection = vTokens.filter(t => cleanTokens.includes(t));
+                   const overlap = intersection.length / Math.min(vTokens.length, cleanTokens.length || 1);
+                   if (overlap > 0.6) return false; // Still block same song
+                   return true; 
+               });
+          }
 
-          // Pick random from top 5 for variety
           const poolSize = Math.min(candidates.length, 5);
           const validNext = poolSize > 0 
               ? candidates[Math.floor(Math.random() * poolSize)] 
@@ -549,7 +568,7 @@ io.on('connection', (socket) => {
                          room.nextRecommendation = null; // Consumed
                     } else {
                          console.log(`[AutoPlay] No buffer. Live fetching for: "${sourceTitle}"`);
-                         nextVideoToPlay = await fetchBestRecommendation(sourceTitle, lastVideoId, room.currentArtist);
+                         nextVideoToPlay = await fetchBestRecommendation(sourceTitle, lastVideoId, room.currentArtist, room.playHistory);
                     }
                 } else {
                      console.log('[AutoPlay] Could not determine source title. Stopping.');
@@ -566,7 +585,7 @@ io.on('connection', (socket) => {
                      
                      // BACKGROUND: Pre-fetch the NEXT one immediately
                      // Use the one we just added as the seed
-                     fetchBestRecommendation(nextVideoToPlay.title, nextVideoToPlay.id, nextVideoToPlay.artist)
+                     fetchBestRecommendation(nextVideoToPlay.title, nextVideoToPlay.id, nextVideoToPlay.artist, room.playHistory)
                         .then(rec => {
                             if (rec) {
                                 console.log(`[RecEngine] Buffered Future Recommendation: "${rec.title}"`);
@@ -608,6 +627,10 @@ io.on('connection', (socket) => {
       
       // Update room state title so Auto-Play doesn't need to fetch it later
       room.currentTitle = nextVideo.title; room.currentArtist = nextVideo.artist; 
+
+      // Update History
+      if (room.playHistory.length > 50) room.playHistory.shift();
+      room.playHistory.push({ id: nextVideo.id, title: nextVideo.title }); 
 
       // Broadcast change
       io.to(roomId).emit('sync_action', { 
@@ -681,8 +704,12 @@ io.on('connection', (socket) => {
            room.currentArtist = videoInfo.channel.name;
            console.log(`[Manual Play] Set title: "${room.currentTitle}", Artist: "${room.currentArtist}", Duration: ${room.duration}s`);
            
+           // Update History
+           if (room.playHistory.length > 50) room.playHistory.shift();
+           room.playHistory.push({ id: payload, title: room.currentTitle });
+
            // Background Pre-fetch System
-           fetchBestRecommendation(room.currentTitle, room.videoId, room.currentArtist)
+           fetchBestRecommendation(room.currentTitle, room.videoId, room.currentArtist, room.playHistory)
               .then(rec => {
                    if (rec) {
                        console.log(`[RecEngine] Buffered Future Recommendation: "${rec.title}"`);
