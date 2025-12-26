@@ -95,6 +95,8 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
     setIsSkipping(false);
   }, [currentVideoId]);
 
+  const [viewingImage, setViewingImage] = useState(null); // Image Viewer State
+
   const handleSkip = () => {
     if (isSkipping) return;
     setIsSkipping(true);
@@ -705,7 +707,7 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                      autoFocus
                      // Removed onBlur to prevent accidental closing before clicking save
                    />
-                   <button type="submit" className="btn-icon" style={{ padding: '0.2rem', color: '#4ade80' }} title="Save Name"><Check size={16}/></button>
+                   <button type="submit" className="btn-icon" style={{ padding: '0.2rem', color: '#4ade80' }} title="Save Name" aria-label="Save Name"><Check size={16}/></button>
                </form>
             ) : (
                <span 
@@ -748,11 +750,11 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                                     {isAdmin && user.id !== socket?.id && (
                                         <div className="user-actions">
                                             {user.id !== adminId && (
-                                                <button className="btn-icon" onClick={(e) => { e.stopPropagation(); handleGrantAdmin(user.id); }} title="Make Admin">
+                                                <button className="btn-icon" onClick={(e) => { e.stopPropagation(); handleGrantAdmin(user.id); }} title="Make Admin" aria-label={`Grant admin to ${user.name}`}>
                                                     <UserCog size={14} />
                                                 </button>
                                             )}
-                                            <button className="btn-icon" onClick={(e) => { e.stopPropagation(); handleKickUser(user.id); }} title="Kick User" style={{ color: '#ef4444' }}>
+                                            <button className="btn-icon" onClick={(e) => { e.stopPropagation(); handleKickUser(user.id); }} title="Kick User" style={{ color: '#ef4444' }} aria-label={`Kick ${user.name}`}>
                                                 <LogOut size={14} />
                                             </button>
                                         </div>
@@ -1620,10 +1622,7 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                                           cursor: 'pointer',
                                           border: '1px solid var(--border-color)'
                                       }} 
-                                      onClick={() => {
-                                          const w = window.open('');
-                                          w.document.write('<img src="' + msg.image + '" style="max-width:100%"/>');
-                                      }}
+                                      onClick={() => setViewingImage(msg.image)}
                                    />
                                </div>
                            )}
@@ -1676,6 +1675,7 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                             style={{ color: showEmojiPicker ? 'var(--accent-primary)' : 'var(--text-secondary)' }}
                             title="Add Emoji"
+                            aria-label="Toggle emoji picker"
                         >
                             <Smile size={20} />
                         </button>
@@ -1685,6 +1685,7 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                             onClick={() => fileInputRef.current?.click()}
                             title="Upload Image"
                             style={{ color: 'var(--text-secondary)' }}
+                            aria-label="Upload image"
                         >
                             <ImageIcon size={20} />
                         </button>
@@ -1709,6 +1710,57 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                  </div>
         </aside>
       </main>
+
+      {/* Image Viewer Modal */}
+      {viewingImage && (
+            <div style={{
+              position: 'fixed',
+              top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(0,0,0,0.9)',
+              zIndex: 2000,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backdropFilter: 'blur(5px)',
+              padding: '10px',
+              animation: 'fadeIn 0.2s ease-out'
+            }} onClick={() => setViewingImage(null)}>
+               <div style={{ position: 'relative', maxWidth: '100%', maxHeight: '100%' }}>
+                  <button 
+                    onClick={() => setViewingImage(null)}
+                    aria-label="Close image viewer"
+                    style={{
+                      position: 'absolute',
+                      top: '-40px',
+                      right: '0',
+                      background: 'rgba(255,255,255,0.1)',
+                      border: 'none',
+                      color: 'white',
+                      cursor: 'pointer',
+                      borderRadius: '50%',
+                      padding: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <X size={24} />
+                  </button>
+                  <img 
+                    src={viewingImage} 
+                    alt="Full size" 
+                    style={{ 
+                      maxWidth: '95vw', 
+                      maxHeight: '90vh', 
+                      borderRadius: '8px', 
+                      boxShadow: '0 10px 40px rgba(0,0,0,0.5)',
+                      objectFit: 'contain' 
+                    }} 
+                    onClick={(e) => e.stopPropagation()} 
+                  />
+               </div>
+            </div>
+      )}
       
     </div>
   );
