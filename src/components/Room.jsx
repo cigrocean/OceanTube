@@ -1713,48 +1713,64 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
 
       {/* Image Viewer Modal */}
       {viewingImage && (
-            <div style={{
-              position: 'fixed',
-              top: 0, left: 0, right: 0, bottom: 0,
-              background: 'rgba(0,0,0,0.9)',
-              zIndex: 2000,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backdropFilter: 'blur(5px)',
-              padding: '10px',
-              animation: 'fadeIn 0.2s ease-out'
-            }} onClick={() => setViewingImage(null)}>
-               <div style={{ position: 'relative', maxWidth: '100%', maxHeight: '100%' }}>
-                  <button 
+            <div 
+                style={{
+                    position: 'fixed',
+                    top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.92)',
+                    zIndex: 2500,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backdropFilter: 'blur(10px)',
+                    animation: 'modalFadeIn 0.3s ease-out'
+                }} 
+                onClick={() => setViewingImage(null)}
+            >
+               {/* Animation Keyframes */}
+               <style>{`
+                 @keyframes modalFadeIn { from { opacity: 0; } to { opacity: 1; } }
+                 @keyframes imageZoom { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+               `}</style>
+
+               <button 
                     onClick={() => setViewingImage(null)}
                     aria-label="Close image viewer"
+                    className="btn-icon"
                     style={{
                       position: 'absolute',
-                      top: '-40px',
-                      right: '0',
+                      top: '20px',
+                      right: '25px',
                       background: 'rgba(255,255,255,0.1)',
-                      border: 'none',
                       color: 'white',
-                      cursor: 'pointer',
+                      width: '44px',
+                      height: '44px',
                       borderRadius: '50%',
-                      padding: '8px',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center'
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      border: '1px solid rgba(255,255,255,0.2)',
+                      transition: 'all 0.2s',
+                      zIndex: 2501
                     }}
-                  >
+                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.2)'; e.currentTarget.style.transform = 'rotate(90deg)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.transform = 'rotate(0deg)'; }}
+               >
                     <X size={24} />
-                  </button>
+               </button>
+
+               <div style={{ position: 'relative', width: 'auto', height: 'auto', display: 'flex', justifyContent: 'center' }}>
                   <img 
                     src={viewingImage} 
                     alt="Full size" 
                     style={{ 
-                      maxWidth: '95vw', 
-                      maxHeight: '90vh', 
-                      borderRadius: '8px', 
-                      boxShadow: '0 10px 40px rgba(0,0,0,0.5)',
-                      objectFit: 'contain' 
+                      maxWidth: '96vw', 
+                      maxHeight: '92vh', 
+                      borderRadius: '12px', 
+                      boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
+                      objectFit: 'contain',
+                      animation: 'imageZoom 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
                     }} 
                     onClick={(e) => e.stopPropagation()} 
                   />

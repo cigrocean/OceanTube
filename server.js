@@ -95,7 +95,29 @@ app.get('/api/search', async (req, res) => {
 
 // Helper to parse "MM:SS" or "HH:MM:SS" to seconds
 
-
+// Active Rooms Endpoint
+app.get('/api/rooms', (req, res) => {
+  const activeRooms = Object.keys(rooms)
+    .map(roomId => {
+        const room = rooms[roomId];
+        // Calculate dynamic admin name (in case admin left/changed)
+        const adminUser = room.users.find(u => u.id === room.admin);
+        const adminName = adminUser ? adminUser.name : 'Unknown Host';
+        
+        return {
+            id: roomId,
+            userCount: room.users.length,
+            adminName: adminName,
+            currentTitle: room.currentTitle,
+            playing: room.playing,
+            isPrivate: !!room.password
+        };
+    })
+    .filter(r => r.userCount > 0) // Only show active rooms? Or all? Let's show all that exist in memory. actually maybe filter 0 users to reduce clutter if they are just zombie rooms waiting for cleanup
+    .sort((a, b) => b.userCount - a.userCount);
+    
+  res.json(activeRooms);
+});
 app.use(express.static(path.join(__dirname, 'dist')));
 
 // Serve static files in production

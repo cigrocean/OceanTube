@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate, useParams, Navigate, useSearchParams } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
-import { Play, Zap, Calendar, Compass } from 'lucide-react';
+import { Play, Zap, Calendar, Compass, Users, Lock, Unlock, Radio, MonitorPlay } from 'lucide-react';
 import { Room } from './components/Room';
 
 function Landing() {
@@ -19,6 +19,29 @@ function Landing() {
         setJoinInput(joinParam);
     }
   }, [searchParams]);
+
+  const [activeRooms, setActiveRooms] = useState([]);
+  const [loadingRooms, setLoadingRooms] = useState(true);
+
+  useEffect(() => {
+    const fetchRooms = async () => {
+        try {
+            const res = await fetch('/api/rooms'); 
+            if (res.ok) {
+                const data = await res.json();
+                setActiveRooms(data);
+            }
+        } catch (e) {
+            console.error('Failed to fetch rooms:', e);
+        } finally {
+            setLoadingRooms(false);
+        }
+    };
+    
+    fetchRooms();
+    const interval = setInterval(fetchRooms, 10000); // Poll every 10s
+    return () => clearInterval(interval);
+  }, []);
 
   const handleCreate = () => {
     if (!username.trim()) {
@@ -174,6 +197,114 @@ function Landing() {
                     </div>
                 </div>
              )}
+          </div>
+
+          {/* Active Rooms Grid */}
+          <div style={{ marginTop: '3rem', width: '100%', maxWidth: '1000px', paddingBottom: '2rem' }}>
+             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', justifyContent: 'center' }}>
+                <Radio size={24} className="pulse" style={{ color: '#ef4444' }} />
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 600 }}>Active Rooms</h3>
+                {loadingRooms && <span style={{ fontSize: '0.8rem', opacity: 0.5 }}>(Updating...)</span>}
+             </div>
+
+             <div style={{ 
+                 display: 'grid', 
+                 gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', 
+                 gap: '1rem',
+                 width: '100%'
+             }}>
+                 {!loadingRooms && activeRooms.length === 0 && (
+                     <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '2rem', border: '1px dashed var(--border-color)', borderRadius: '12px', color: 'var(--text-secondary)' }}>
+                         No active rooms right now. Be the first to create one!
+                     </div>
+                 )}
+                 
+                 {activeRooms.map(room => (
+                     <button
+                        key={room.id} 
+                        onClick={() => {
+                             setJoinInput(room.id);
+                             window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        className="room-card-btn"
+                        aria-label={`Join Room ${room.id}. Status: ${room.isPrivate ? 'Private' : 'Public'}. ${room.playing ? 'Now Playing: ' + (room.currentTitle || 'Unknown Video') : 'Waiting for video'}. Host: ${room.adminName}. Users: ${room.userCount}.`}
+                        style={{
+                            width: '100%',
+                            textAlign: 'left',
+                            background: 'var(--bg-secondary)',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '12px',
+                            padding: '1rem',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '0.8rem',
+                            transition: 'all 0.2s',
+                            position: 'relative',
+                            overflow: 'hidden',
+                            fontFamily: 'inherit',
+                            color: 'inherit'
+                        }}
+                        onMouseEnter={e => {
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                            e.currentTarget.style.borderColor = 'var(--accent-primary)';
+                        }}
+                        onMouseLeave={e => {
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.borderColor = 'var(--border-color)';
+                        }}
+                        onFocus={e => e.currentTarget.style.borderColor = 'var(--accent-primary)'}
+                        onBlur={e => e.currentTarget.style.borderColor = 'var(--border-color)'}
+                     >
+                        {/* Header */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontFamily: 'monospace', background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.9rem' }}>
+                                #{room.id}
+                            </span>
+                            {room.isPrivate ? (
+                                <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: '#fbbf24', background: 'rgba(251, 191, 36, 0.1)', padding: '2px 8px', borderRadius: '100px' }}>
+                                    <Lock size={12} aria-hidden="true" /> Private
+                                </span>
+                            ) : (
+                                <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: '#4ade80', background: 'rgba(74, 222, 128, 0.1)', padding: '2px 8px', borderRadius: '100px' }}>
+                                    <Unlock size={12} aria-hidden="true" /> Public
+                                </span>
+                            )}
+                        </div>
+
+                        {/* Title Info */}
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
+                             {room.playing ? (
+                                 <MonitorPlay size={16} aria-hidden="true" style={{ color: 'var(--accent-primary)', marginTop: '3px', flexShrink: 0 }} />
+                             ) : (
+                                 <MonitorPlay size={16} aria-hidden="true" style={{ color: 'var(--text-tertiary)', marginTop: '3px', flexShrink: 0 }} />
+                             )}
+                             <span style={{ 
+                                 fontSize: '0.95rem', 
+                                 fontWeight: 500, 
+                                 lineHeight: '1.4',
+                                 display: '-webkit-box',
+                                 WebkitLineClamp: 2,
+                                 WebkitBoxOrient: 'vertical',
+                                 overflow: 'hidden',
+                                 color: room.playing ? 'var(--text-primary)' : 'var(--text-secondary)'
+                             }}>
+                                 {room.currentTitle || 'Waiting for video...'}
+                             </span>
+                        </div>
+
+                        {/* Footer */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: '0.8rem', borderTop: '1px solid var(--border-color)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                <Users size={14} aria-hidden="true" /> {room.userCount}
+                            </div>
+                            <div style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)' }}>
+                                Host: <span style={{ color: 'var(--text-secondary)' }}>{room.adminName}</span>
+                            </div>
+                        </div>
+                     </button>
+                 ))}
+             </div>
           </div>
        </div>
        
