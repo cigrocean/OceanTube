@@ -1394,6 +1394,7 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                            padding: '0.6rem 1rem',
                            display: 'flex',
                            alignItems: 'center',
+                           justifyContent: 'center',
                            gap: '0.5rem',
                            color: autoPlayEnabled ? 'var(--accent-primary)' : undefined,
                            borderColor: autoPlayEnabled ? 'var(--accent-primary)' : undefined,
@@ -1440,9 +1441,9 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                     <button 
                        className="btn-secondary" 
                        onClick={() => socket?.emit('play_next', { roomId })}
-                       disabled={queue.length === 0}
-                       title={queue.length > 0 ? 'Skip to next video in queue' : 'Queue is empty'}
-                       aria-label={queue.length > 0 ? 'Skip to next video' : 'Skip disabled, queue is empty'}
+                       disabled={queue.length === 0 && !autoPlayEnabled}
+                       title={queue.length > 0 ? 'Skip to next video' : (autoPlayEnabled ? 'Skip to recommendation' : 'Queue is empty')}
+                       aria-label={queue.length > 0 ? 'Skip to next video' : (autoPlayEnabled ? 'Skip to recommendation' : 'Skip disabled')}
                        style={{ 
                          padding: '0.6rem 1rem', 
                          display: 'flex', 

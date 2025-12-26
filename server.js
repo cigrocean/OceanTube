@@ -460,7 +460,14 @@ io.on('connection', (socket) => {
                     console.log(`[AutoPlay] Context Search: "${cleanTitle}" (Derived from: "${sourceTitle}")`);
                     
                     // Search with limit 15 to get variety
-                    const related = await YouTube.search(cleanTitle, { limit: 15, type: 'video' })
+                    const isMix = (t) => t.toLowerCase().includes('mix') || t.toLowerCase().includes('radio');
+                    
+                    // Search with limit 18 to get variety
+                    // Append "similar songs" to guide YouTube towards recommendations (unless it's already a Mix)
+                    const searchQuery = isMix(cleanTitle) ? cleanTitle : `${cleanTitle} similar songs`;
+                    console.log(`[AutoPlay] Query: "${searchQuery}"`);
+
+                    const related = await YouTube.search(searchQuery, { limit: 18, type: 'video' })
                          .catch(e => {
                              console.warn(`[AutoPlay] Search failed: ${e.message}`); 
                              return [];
@@ -470,13 +477,18 @@ io.on('connection', (socket) => {
                         // Filter 1: ID Check
                         let candidates = related.filter(v => v.id !== lastVideoId);
                         
-                        // Filter 2: "Same Song" Avoidance
-                        // If not a "Mix" or "Radio", avoid result titles that effectively duplicate the query.
-                        const isMix = (t) => t.toLowerCase().includes('mix') || t.toLowerCase().includes('radio');
-                        
+                        // Filter 2: Smart Recommendation (Variety)
                         const distinctCandidates = candidates.filter(v => {
-                            if (isMix(v.title)) return true; // Lofi users maximize similar titles
-                            return !v.title.toLowerCase().includes(cleanTitle.toLowerCase()); // Pop users minimize same titles
+                            if (isMix(v.title)) return true; // Lofi/Mixes: Allow anything similar
+                            
+                            // Pop/Rock: Force Variety
+                            // 1. Avoid exact same title (e.g. Lyrics version)
+                            if (v.title.toLowerCase().includes(cleanTitle.toLowerCase())) return false;
+                            
+                            // 2. Avoid same artist (if known) to mimic Spotify "Radio"
+                            if (room.currentArtist && v.channel && v.channel.name === room.currentArtist) return false;
+                            
+                            return true;
                         });
                         
                         // Prefer distinct, but fallback if empty
@@ -489,9 +501,9 @@ io.on('connection', (socket) => {
                             : null;
                         
                         if (validNext) {
-                             nextVideoToPlay = {
                                  id: validNext.id,
                                  title: validNext.title,
+                                 artist: validNext.channel.name,
                                  duration: validNext.duration / 1000, 
                                  thumbnail: validNext.thumbnail?.url,
                                  addedBy: 'Auto-Play 📻'
@@ -556,7 +568,7 @@ io.on('connection', (socket) => {
       console.log(`[AutoPlay] Playing next: ${nextVideo.title} (${room.duration}s)`);
       
       // Update room state title so Auto-Play doesn't need to fetch it later
-      room.currentTitle = nextVideo.title; 
+      room.currentTitle = nextVideo.title; room.currentArtist = nextVideo.artist; 
 
       // Broadcast change
       io.to(roomId).emit('sync_action', { 
@@ -625,7 +637,8 @@ io.on('connection', (socket) => {
            const videoInfo = await YouTube.getVideo(`https://www.youtube.com/watch?v=${payload}`);
            room.duration = videoInfo.duration / 1000;
            room.currentTitle = videoInfo.title;
-           console.log(`[Manual Play] Set title: "${room.currentTitle}", Duration: ${room.duration}s`);
+           room.currentArtist = videoInfo.channel.name;
+           console.log(`[Manual Play] Set title: "${room.currentTitle}", Artist: "${room.currentArtist}", Duration: ${room.duration}s`);
        } catch (e) {
            console.error(`[Manual Play] Metadata fetch failed:`, e.message);
            room.duration = 0;
