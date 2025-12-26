@@ -26,7 +26,7 @@ function Landing() {
   useEffect(() => {
     const fetchRooms = async () => {
         try {
-            const res = await fetch('/api/rooms'); 
+            const res = await fetch('/api/active-rooms'); 
             if (res.ok) {
                 const data = await res.json();
                 setActiveRooms(data);

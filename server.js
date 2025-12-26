@@ -107,7 +107,9 @@ app.get('/api/search', async (req, res) => {
 
 // Active Rooms Endpoint
 // Active Rooms Endpoint
-app.get('/api/rooms', (req, res) => {
+// Active Rooms Endpoint
+app.get('/api/active-rooms', (req, res) => {
+  res.set('Cache-Control', 'no-store');
   try {
       if (!rooms) return res.json([]);
       
