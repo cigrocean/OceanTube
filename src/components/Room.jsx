@@ -584,6 +584,7 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
 
   const onPlay = () => {
       if (isAdmin) {
+          setIsPlaying(true);
           socket?.emit('sync_action', { roomId, type: 'play' });
       } else {
           socket?.emit('request_sync', roomId);
@@ -593,6 +594,7 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
   const onPause = () => {
       console.log('[Room] onPause called. Admin:', isAdmin);
       if (isAdmin) {
+          setIsPlaying(false);
           console.log('[Room] Emitting pause action');
           socket?.emit('sync_action', { roomId, type: 'pause' });
       }
