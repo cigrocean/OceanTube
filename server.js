@@ -1,10 +1,13 @@
+```javascript
 import express from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { fileURLToPath } from 'url';
 import path from 'path';
-import { YouTube } from 'youtube-sr';
+import { v4 as uuidv4 } from 'uuid';
+import yts from 'yt-search';
+import fs from 'fs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -465,6 +468,7 @@ io.on('connection', (socket) => {
                           sourceTitle.toLowerCase().includes('transition') ||
                           sourceTitle.match(/\s+x\s+/);
       
+      
       try {
           // Robust Context Logic:
           // If we extracted the Artist from the Title (e.g. "Travis Scott - Sicko Mode"), 
@@ -482,12 +486,15 @@ io.on('connection', (socket) => {
                ];
                const query = scenarios[Math.floor(Math.random() * scenarios.length)];
                console.log(`[RecEngine] Searching (Strategy A - Artist): "${query}"`);
-               related = await YouTube.search(query, searchOptions);
+               
+               const r = await yts(query);
+               related = r.videos;
           }
           
           if (!related || related.length === 0) {
                console.log(`[RecEngine] Searching (Strategy B - Title): "${cleanTitle}"`);
-               related = await YouTube.search(cleanTitle, searchOptions);
+               const r = await yts(cleanTitle);
+               related = r.videos;
           }
       } catch (e) {
            console.warn(`[RecEngine] Search Error: ${e.message}`);
@@ -499,19 +506,25 @@ io.on('connection', (socket) => {
 
           // Filter 1: History & ID Check & Anti-Garbage
           const distinctCandidates = related.filter(v => {
+              // Normalize properties for yt-search
+              const vId = v.videoId;
+              const vTitle = v.title;
+              const vDurationMs = v.seconds * 1000;
+              const vChannel = v.author ? v.author.name : '';
+              
               // A. Basic ID Checks
-              if (v.id === lastVideoId) return false;
-              if (playHistory.some(h => h.id === v.id)) return false; 
+              if (vId === lastVideoId) return false;
+              if (playHistory.some(h => h.id === vId)) return false; 
               
               // B. Anti-Garbage (Strict Quality Control)
               // 1. Minimum Duration: 2 minutes (120s) -> Kills Shorts, TikToks, Memes
-              if (v.duration < 120000) return false; 
+              if (vDurationMs < 120000) return false; 
               
               // 2. Keyword Filter
-              if (garbageKeywords.some(w => v.title.toLowerCase().includes(w))) return false;
+              if (garbageKeywords.some(w => vTitle.toLowerCase().includes(w))) return false;
 
               // C. Content Check
-              const vTokens = getTokens(v.title);
+              const vTokens = getTokens(vTitle);
               
               // 1. Strict History Check
               const historyConflict = playHistory.some(h => {
@@ -528,9 +541,9 @@ io.on('connection', (socket) => {
               if (overlap > 0.6) return false; 
               
               // 3. Artist Check (Prevent back-to-back same artist)
-              if (currentArtist && v.channel && !sourceIsMix) {
+              if (currentArtist && vChannel && !sourceIsMix) {
                   const a1 = getTokens(currentArtist);
-                  const a2 = getTokens(v.channel.name);
+                  const a2 = getTokens(vChannel);
                   const artistOverlap = a1.filter(t => a2.includes(t)).length;
                   if (artistOverlap > 0 && a1.length > 0) return false; 
               }
@@ -543,13 +556,18 @@ io.on('connection', (socket) => {
           if (candidates.length === 0) {
                console.log('[RecEngine] Strict filters removed all. Relaxing Artist Check...');
                candidates = related.filter(v => {
-                   if (v.id === lastVideoId) return false;
-                   if (playHistory.some(h => h.id === v.id)) return false;
+                   const vId = v.videoId;
+                   const vTitle = v.title;
+                   const vDurationMs = v.seconds * 1000;
+                   const vChannel = v.author ? v.author.name : '';
+
+                   if (vId === lastVideoId) return false;
+                   if (playHistory.some(h => h.id === vId)) return false;
                    // Anti-Garbage is NON-NEGOTIABLE
-                   if (v.duration < 120000) return false; 
-                   if (garbageKeywords.some(w => v.title.toLowerCase().includes(w))) return false;
+                   if (vDurationMs < 120000) return false; 
+                   if (garbageKeywords.some(w => vTitle.toLowerCase().includes(w))) return false;
                    
-                   const vTokens = getTokens(v.title);
+                   const vTokens = getTokens(vTitle);
                    const intersection = vTokens.filter(t => cleanTokens.includes(t));
                    const overlap = intersection.length / Math.min(vTokens.length, cleanTokens.length || 1);
                    if (overlap > 0.6) return false; 
@@ -564,11 +582,11 @@ io.on('connection', (socket) => {
           
           if (validNext) {
                return {
-                   id: validNext.id,
+                   id: validNext.videoId,
                    title: validNext.title,
-                   artist: validNext.channel.name,
-                   duration: validNext.duration / 1000, 
-                   thumbnail: validNext.thumbnail?.url,
+                   artist: validNext.author ? validNext.author.name : 'Unknown',
+                   duration: validNext.seconds, 
+                   thumbnail: validNext.thumbnail,
                    addedBy: 'Auto-Play 📻'
                };
           }
@@ -590,16 +608,16 @@ io.on('connection', (socket) => {
                 let sourceTitle = room.currentTitle;
                 const lastVideoId = room.videoId;
 
-                // 1. If we don't have title, try to fetch it
-                if (!sourceTitle) {
-                    console.log(`[AutoPlay] Title missing. Fetching metadata for ${lastVideoId}...`);
-                    const currentVideo = await YouTube.getVideo(`https://www.youtube.com/watch?v=${lastVideoId}`)
-                        .catch(e => {
-                            console.warn(`[AutoPlay] Failed to get video info for ${lastVideoId}: ${e.message}`);
-                            return null; 
-                        });
-                    if (currentVideo) sourceTitle = currentVideo.title;
-                }
+                 // 1. If we don't have title, try to fetch it
+                 if (!sourceTitle) {
+                     console.log(`[AutoPlay] Title missing. Fetching metadata for ${lastVideoId}...`);
+                     try {
+                         const currentVideo = await yts({ videoId: lastVideoId });
+                         if (currentVideo) sourceTitle = currentVideo.title;
+                     } catch(e) {
+                         console.warn(`[AutoPlay] Failed to get video info for ${lastVideoId}: ${e.message}`);
+                     }
+                 }
 
                 let nextVideoToPlay = room.nextRecommendation;
 
@@ -739,31 +757,32 @@ io.on('connection', (socket) => {
        room.timestamp = 0;
        
        try {
-           const videoInfo = await YouTube.getVideo(`https://www.youtube.com/watch?v=${payload}`);
-           room.duration = videoInfo.duration / 1000;
-           room.currentTitle = videoInfo.title;
-           room.currentArtist = videoInfo.channel.name;
-           console.log(`[Manual Play] Set title: "${room.currentTitle}", Artist: "${room.currentArtist}", Duration: ${room.duration}s`);
-           
-           // Update History
-           if (room.playHistory.length > 50) room.playHistory.shift();
-           room.playHistory.push({ id: payload, title: room.currentTitle });
-
-           // Background Pre-fetch System
-           fetchBestRecommendation(room.currentTitle, room.videoId, room.currentArtist, room.playHistory)
-              .then(rec => {
-                   if (rec) {
-                       console.log(`[RecEngine] Buffered Future Recommendation: "${rec.title}"`);
-                       room.nextRecommendation = rec;
-                   }
-              })
-              .catch(e => console.warn(`[RecEngine] Buffer error: ${e.message}`));
-
-       } catch (e) {
-           console.error(`[Manual Play] Metadata fetch failed:`, e.message);
-           room.duration = 0;
-           room.currentTitle = payload;
-       }
+            const videoInfo = await yts({ videoId: payload });
+            room.duration = videoInfo.seconds;
+            room.currentTitle = videoInfo.title;
+            room.currentArtist = videoInfo.author ? videoInfo.author.name : 'Unknown';
+            console.log(`[Manual Play] Set title: "${room.currentTitle}", Artist: "${room.currentArtist}", Duration: ${room.duration}s`);
+            
+            // Update History
+            if (room.playHistory.length > 50) room.playHistory.shift();
+            room.playHistory.push({ id: payload, title: room.currentTitle });
+ 
+            // Background Pre-fetch System
+            fetchBestRecommendation(room.currentTitle, room.videoId, room.currentArtist, room.playHistory)
+               .then(rec => {
+                    if (rec) {
+                        console.log(`[RecEngine] Buffered Future Recommendation: "${rec.title}"`);
+                        room.nextRecommendation = rec;
+                    }
+               })
+               .catch(e => console.warn(`[RecEngine] Buffer error: ${e.message}`));
+ 
+        } catch (e) {
+            console.error(`[Manual Play] Metadata fetch failed:`, e.message);
+            room.duration = 0;
+            room.currentTitle = payload;
+            room.currentArtist = null;
+        }
        
        room.lastPlayTime = Date.now();
        startRoomTimer(roomId);
