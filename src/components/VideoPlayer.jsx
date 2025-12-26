@@ -377,6 +377,8 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
       };
 
       const onSync = ({ type, time, payload }) => {
+          // Admin controls the room; should not sync to server echoes
+          if (isAdmin) return;
           if (!isPlayerReady || typeof playerRef.current.seekTo !== 'function') return;
           
           switch (type) {
@@ -443,6 +445,7 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
       };
       
       const onSyncExact = ({ time, playing: shouldPlay }) => {
+          if (isAdmin) return;
           if (!isPlayerReady || !playerRef.current) return;
           
           const currentTime = playerRef.current.getCurrentTime?.() || 0;

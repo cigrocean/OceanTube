@@ -1457,7 +1457,7 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                     <button 
                        className="btn-secondary" 
                        onClick={handleSkip}
-                       disabled={(!currentVideoId) || (queue.length === 0 && !autoPlayEnabled) || isSkipping}
+                       disabled={(queue.length === 0 && !autoPlayEnabled) || isSkipping}
                        title={isSkipping ? 'Skipping...' : (queue.length > 0 ? 'Skip to next video' : (autoPlayEnabled ? 'Skip to recommendation' : 'Queue is empty'))}
                        aria-label={isSkipping ? 'Skipping video' : 'Skip video'}
                        style={{ 
@@ -1466,8 +1466,8 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                          alignItems: 'center', 
                          justifyContent: 'center',
                          gap: '0.5rem',
-                         opacity: ((!currentVideoId) || (queue.length === 0 && !autoPlayEnabled) || isSkipping) ? 0.5 : 1,
-                         cursor: ((!currentVideoId) || (queue.length === 0 && !autoPlayEnabled) || isSkipping) ? 'not-allowed' : 'pointer',
+                         opacity: ((queue.length === 0 && !autoPlayEnabled) || isSkipping) ? 0.5 : 1,
+                         cursor: ((queue.length === 0 && !autoPlayEnabled) || isSkipping) ? 'not-allowed' : 'pointer',
                          minWidth: '90px'
                        }}
                     >
