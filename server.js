@@ -54,9 +54,11 @@ const CACHE_TTL = 3600 * 1000; // 1 Hour
 const rooms = {};
 
 // Active Rooms Endpoint (Moved to top)
-app.get('/api/active-rooms', (req, res) => {
-  console.log('[API] User hit /api/active-rooms');
-  res.set('Cache-Control', 'no-store');
+app.get('/api/v2/rooms', (req, res) => {
+  console.log('[API] User hit /api/v2/rooms');
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
   try {
       if (!rooms) return res.json([]);
       
