@@ -43,6 +43,9 @@ app.get('/health', (req, res) => {
 const searchCache = new Map();
 const CACHE_TTL = 3600 * 1000; // 1 Hour
 
+// Room state: { roomId: { videoId, playing, sentiment, users: [{id, name, sessionId}], admin: string, adminSessionId: string } }
+const rooms = {};
+
 app.get('/api/search', async (req, res) => {
   const query = req.query.q;
   if (!query) return res.status(400).json({ error: 'Missing query' });
@@ -127,8 +130,7 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-// Room state: { roomId: { videoId, playing, sentiment, users: [{id, name, sessionId}], admin: string, adminSessionId: string } }
-const rooms = {};
+
 
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
