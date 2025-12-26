@@ -14,11 +14,10 @@ export function useSocket(roomId, username, sessionId, password) { // Added pass
     
     const newSocket = io(SOCKET_URL, {
         reconnection: true,
-        reconnectionAttempts: Infinity, // Keep trying until server wakes up
+        reconnectionAttempts: Infinity,
         reconnectionDelay: 2000,
         timeout: 20000, 
-        transports: ['polling', 'websocket'],
-        forceNew: true, // Force new connection on mount to avoid stale states
+        transports: ['websocket'], // Force WebSocket to avoid polling 503s
     });
 
     // Debug connection errors
