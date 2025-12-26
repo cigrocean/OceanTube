@@ -41,11 +41,9 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
   useEffect(() => {
     // If NO videoId, confirm destruction of any existing player
     if (!videoId) {
-        if (playerRef.current) {
-            console.log('VideoPlayer: ID removed, destroying player');
-            try { playerRef.current.destroy(); } catch(e){}
-            playerRef.current = null;
-            setIsPlayerReady(false);
+        if (playerRef.current && isPlayerReady) {
+            console.log('VideoPlayer: ID removed, stopping playback (keeping instance)');
+            try { playerRef.current.stopVideo(); } catch(e){}
         }
         return;
     }
