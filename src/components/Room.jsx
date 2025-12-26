@@ -1578,7 +1578,7 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
            </div>
            
            {showSearch && (
-             <VideoSearch 
+             <VideoSearch key="search-overlay" 
                onSelect={handleVideoSelect} 
                onClose={() => setShowSearch(false)}
                initialQuery={searchQuery}
@@ -1589,8 +1589,8 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
              />
            )}
 
-           <div className="video-player-wrapper" style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column' }}>
-             <VideoPlayer 
+           <div key="player-wrapper" className="video-player-wrapper" style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column' }}>
+             <VideoPlayer key="video-player-instance" 
                 videoId={currentVideoId}
                 playing={isPlaying}
                 onPlay={onPlay}
