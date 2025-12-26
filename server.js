@@ -14,6 +14,12 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const server = createServer(app);
 
+// Debug Middleware: Log every request to see what's actually hitting the server
+app.use((req, res, next) => {
+    console.log(`[Incoming] ${req.method} ${req.url}`);
+    next();
+});
+
 // CORS configuration for production deployment
 const allowedOrigins = process.env.ALLOWED_ORIGINS 
   ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
