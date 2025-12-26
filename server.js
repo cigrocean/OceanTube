@@ -128,7 +128,9 @@ io.on('connection', (socket) => {
         admin: socket.id, // Creator is admin
         adminSessionId: adminSessionId,
         password: password || null, // Set initial password if provided
-        queue: [] // Video Queue
+        queue: [], // Video Queue
+        nextRecommendation: null, // Buffered Next Video
+        autoPlayEnabled: true // Default ON
       };
       console.log(`Room ${room} created by ${name}${password ? ' (Protected)' : ''}`);
     } else {
@@ -418,6 +420,87 @@ io.on('connection', (socket) => {
       }
   };
 
+// Helper: true recommendation engine
+  const fetchBestRecommendation = async (sourceTitle, lastVideoId, currentArtist) => {
+      // Clean title to remove "Official Video", "Lyrics" to find similar vibes, not just same song.
+      let cleanTitle = sourceTitle
+          .replace(/(\(|\[).*(\)|\])/g, '') // Remove content in brackets (often junk)
+          .replace(/official\s+video/gi, '')
+          .replace(/lyrics/gi, '')
+          .replace(/ft\..*/i, '') 
+          .trim();
+
+      if (cleanTitle.length < 2) cleanTitle = sourceTitle; // Safety
+
+      // Search with limit 15 to get variety
+      const isMix = (t) => t.toLowerCase().includes('mix') || t.toLowerCase().includes('radio');
+      
+      // Search Strategy: Tiered Fallback to GUARANTEE results
+      let related = [];
+      const searchOptions = { limit: 20, type: 'video' };
+      
+      try {
+          // Tier 1: "Similar Songs" (Discovery Mode)
+          let query = isMix(cleanTitle) ? cleanTitle : `${cleanTitle} similar songs`;
+          console.log(`[RecEngine] Tier 1 Search: "${query}"`);
+          related = await YouTube.search(query, searchOptions);
+          
+          // Tier 2: Clean Title (Broad Mode)
+          if (!related || related.length === 0) {
+               console.log(`[RecEngine] Tier 1 empty. Retry Tier 2: "${cleanTitle}"`);
+               related = await YouTube.search(cleanTitle, searchOptions);
+          }
+          
+          // Tier 3: Source Title (Panic Mode)
+          if (!related || related.length === 0) {
+               console.log(`[RecEngine] Tier 2 empty. Retry Tier 3: "${sourceTitle}"`);
+               related = await YouTube.search(sourceTitle, searchOptions);
+          }
+      } catch (e) {
+           console.warn(`[RecEngine] Search System Error: ${e.message}`);
+      }
+      
+      if (related && related.length > 0) {
+          // Filter 1: ID Check
+          let candidates = related.filter(v => v.id !== lastVideoId);
+          
+          // Filter 2: Smart Recommendation (Variety)
+          const distinctCandidates = candidates.filter(v => {
+              if (isMix(v.title)) return true; // Lofi/Mixes: Allow anything similar
+              
+              // Pop/Rock: Force Variety
+              // 1. Avoid exact same title (e.g. Lyrics version)
+              if (v.title.toLowerCase().includes(cleanTitle.toLowerCase())) return false;
+              
+              // 2. Avoid same artist (if known) to mimic Spotify "Radio"
+              if (currentArtist && v.channel && v.channel.name === currentArtist) return false;
+              
+              return true;
+          });
+          
+          // Prefer distinct, but fallback if empty
+          if (distinctCandidates.length > 0) candidates = distinctCandidates;
+
+          // Pick random from top 5 for variety
+          const poolSize = Math.min(candidates.length, 5);
+          const validNext = poolSize > 0 
+              ? candidates[Math.floor(Math.random() * poolSize)] 
+              : null;
+          
+          if (validNext) {
+               return {
+                   id: validNext.id,
+                   title: validNext.title,
+                   artist: validNext.channel.name,
+                   duration: validNext.duration / 1000, 
+                   thumbnail: validNext.thumbnail?.url,
+                   addedBy: 'Auto-Play 📻'
+               };
+          }
+      }
+      return null;
+  };
+
   const playNextVideo = async (roomId) => {
       const room = rooms[roomId];
       console.log(`[PlayNext] Executing for room ${roomId}. Queue: ${room?.queue?.length}. AutoPlay: ${room?.autoPlayEnabled}`);
@@ -443,95 +526,19 @@ io.on('connection', (socket) => {
                     if (currentVideo) sourceTitle = currentVideo.title;
                 }
 
-                let nextVideoToPlay = null;
+                let nextVideoToPlay = room.nextRecommendation;
 
                 if (sourceTitle) {
-                    // 2. Intelligent Search for "True Recommendations"
-                    // Clean title to remove "Official Video", "Lyrics" to find similar vibes, not just same song.
-                    let cleanTitle = sourceTitle
-                        .replace(/(\(|\[).*(\)|\])/g, '') // Remove content in brackets (often junk)
-                        .replace(/official\s+video/gi, '')
-                        .replace(/lyrics/gi, '')
-                        .replace(/ft\..*/i, '') 
-                        .trim();
-
-                    if (cleanTitle.length < 2) cleanTitle = sourceTitle; // Safety
-
-                    console.log(`[AutoPlay] Context Search: "${cleanTitle}" (Derived from: "${sourceTitle}")`);
-                    
-                    // Search with limit 15 to get variety
-                    const isMix = (t) => t.toLowerCase().includes('mix') || t.toLowerCase().includes('radio');
-                    
-                    // Search Strategy: Tiered Fallback to GUARANTEE results
-                    let related = [];
-                    const searchOptions = { limit: 20, type: 'video' };
-                    
-                    try {
-                        // Tier 1: "Similar Songs" (Discovery Mode)
-                        let query = isMix(cleanTitle) ? cleanTitle : `${cleanTitle} similar songs`;
-                        console.log(`[AutoPlay] Searching (Tier 1): "${query}"`);
-                        related = await YouTube.search(query, searchOptions);
-                        
-                        // Tier 2: Clean Title (Broad Mode)
-                        if (!related || related.length === 0) {
-                             console.log(`[AutoPlay] Tier 1 empty. Retry (Tier 2): "${cleanTitle}"`);
-                             related = await YouTube.search(cleanTitle, searchOptions);
-                        }
-                        
-                        // Tier 3: Source Title (Panic Mode)
-                        if (!related || related.length === 0) {
-                             console.log(`[AutoPlay] Tier 2 empty. Retry (Tier 3): "${sourceTitle}"`);
-                             related = await YouTube.search(sourceTitle, searchOptions);
-                        }
-                    } catch (e) {
-                         console.warn(`[AutoPlay] Search System Error: ${e.message}`);
-                    }
-                    
-                    if (related && related.length > 0) {
-                        // Filter 1: ID Check
-                        let candidates = related.filter(v => v.id !== lastVideoId);
-                        
-                        // Filter 2: Smart Recommendation (Variety)
-                        const distinctCandidates = candidates.filter(v => {
-                            if (isMix(v.title)) return true; // Lofi/Mixes: Allow anything similar
-                            
-                            // Pop/Rock: Force Variety
-                            // 1. Avoid exact same title (e.g. Lyrics version)
-                            if (v.title.toLowerCase().includes(cleanTitle.toLowerCase())) return false;
-                            
-                            // 2. Avoid same artist (if known) to mimic Spotify "Radio"
-                            if (room.currentArtist && v.channel && v.channel.name === room.currentArtist) return false;
-                            
-                            return true;
-                        });
-                        
-                        // Prefer distinct, but fallback if empty
-                        if (distinctCandidates.length > 0) candidates = distinctCandidates;
-
-                        // Pick random from top 5 for variety
-                        const poolSize = Math.min(candidates.length, 5);
-                        const validNext = poolSize > 0 
-                            ? candidates[Math.floor(Math.random() * poolSize)] 
-                            : null;
-                        
-                        if (validNext) {
-                             nextVideoToPlay = {
-                                 id: validNext.id,
-                                 title: validNext.title,
-                                 artist: validNext.channel.name,
-                                 duration: validNext.duration / 1000, 
-                                 thumbnail: validNext.thumbnail?.url,
-                                 addedBy: 'Auto-Play 📻'
-                             };
-                        }
+                    if (nextVideoToPlay) {
+                         console.log(`[AutoPlay] Used Buffered Recommendation: "${nextVideoToPlay.title}"`);
+                         room.nextRecommendation = null; // Consumed
+                    } else {
+                         console.log(`[AutoPlay] No buffer. Live fetching for: "${sourceTitle}"`);
+                         nextVideoToPlay = await fetchBestRecommendation(sourceTitle, lastVideoId, room.currentArtist);
                     }
                 } else {
                      console.log('[AutoPlay] Could not determine source title. Stopping.');
-                     io.to(roomId).emit('chat_message', { 
-                         type: 'system', 
-                         content: `⚠️ Auto-Play failed: unavailable video info.`,
-                         timestamp: new Date().toISOString()
-                     });
+                     // Fail silent
                 }
 
                 if (nextVideoToPlay) {
@@ -542,19 +549,25 @@ io.on('connection', (socket) => {
                          timestamp: new Date().toISOString()
                      });
                      
+                     // BACKGROUND: Pre-fetch the NEXT one immediately
+                     // Use the one we just added as the seed
+                     fetchBestRecommendation(nextVideoToPlay.title, nextVideoToPlay.id, nextVideoToPlay.artist)
+                        .then(rec => {
+                            if (rec) {
+                                console.log(`[RecEngine] Buffered Future Recommendation: "${rec.title}"`);
+                                room.nextRecommendation = rec;
+                            }
+                        })
+                        .catch(e => console.warn(`[RecEngine] Buffer failed: ${e.message}`));
+                     
                      return playNextVideo(roomId);
                 } else {
-                    console.log('[AutoPlay] No valid related video found.');
-                     // Silently fail if no video found, rather than spamming chat
+                    console.log('[AutoPlay] No valid related video found (after all retries).');
+                    // Silent fail
                 }
 
              } catch (err) {
                  console.error('[AutoPlay] Critical Error:', err);
-                 io.to(roomId).emit('chat_message', { 
-                     type: 'system', 
-                     content: `⚠️ Auto-Play Error: ${err.message}`,
-                     timestamp: new Date().toISOString()
-                 });
              }
           }
           
@@ -588,6 +601,8 @@ io.on('connection', (socket) => {
           sender: 'Queue' 
       });
       io.to(roomId).emit('queue_updated', room.queue);
+       
+       fetchBestRecommendation(room.currentTitle, room.videoId, room.currentArtist).then(r => { if(r) room.nextRecommendation = r; }).catch(console.warn);
       
       startRoomTimer(roomId);
   };
@@ -650,6 +665,17 @@ io.on('connection', (socket) => {
            room.currentTitle = videoInfo.title;
            room.currentArtist = videoInfo.channel.name;
            console.log(`[Manual Play] Set title: "${room.currentTitle}", Artist: "${room.currentArtist}", Duration: ${room.duration}s`);
+           
+           // Background Pre-fetch System
+           fetchBestRecommendation(room.currentTitle, room.videoId, room.currentArtist)
+              .then(rec => {
+                   if (rec) {
+                       console.log(`[RecEngine] Buffered Future Recommendation: "${rec.title}"`);
+                       room.nextRecommendation = rec;
+                   }
+              })
+              .catch(e => console.warn(`[RecEngine] Buffer error: ${e.message}`));
+
        } catch (e) {
            console.error(`[Manual Play] Metadata fetch failed:`, e.message);
            room.duration = 0;
