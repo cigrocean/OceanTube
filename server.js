@@ -423,41 +423,70 @@ io.on('connection', (socket) => {
 
 // Helper: true recommendation engine
   const fetchBestRecommendation = async (sourceTitle, lastVideoId, currentArtist, playHistory = []) => {
-      // 1. Clean Title
+      // 1. Extract Real Artist (Override Channel Name if possible)
+      // Pattern: "Artist - Title" or "Artist - Title (Official Video)"
+      // This fixes the "Travis Scott -> Michael Jackson" jump caused by generic uploader channels.
+      let usedArtist = currentArtist;
+      let artistExtracted = false;
+      const nameMatch = sourceTitle.match(/^([^-]+)\s+-\s+(.+)/);
+      
+      if (nameMatch && nameMatch[1] && nameMatch[1].length > 1) {
+          const extracted = nameMatch[1].trim();
+          // Safety: Don't capture "Official Video" or "Lyrics" if format is weird
+          if (extracted.length < 30 && !extracted.toLowerCase().includes('video')) {
+              usedArtist = extracted;
+              artistExtracted = true;
+              console.log(`[RecEngine] Extracted Real Artist: "${usedArtist}" (Source: "${sourceTitle}")`);
+          }
+      }
+
+      // 2. Clean Title
       let cleanTitle = sourceTitle
+          .replace(/^(.*?)\s+-\s+/, '') // Remove "Artist - " prefix if present 
           .replace(/(\(|\[).*(\)|\])/g, '')
           .replace(/official\s+video/gi, '')
           .replace(/lyrics/gi, '')
           .replace(/ft\..*/i, '') 
+          .replace(/feat\..*/i, '')
           .trim();
+          
       if (cleanTitle.length < 2) cleanTitle = sourceTitle;
 
-      // 2. Tokenizer Helper
+      // 3. Tokenizer Helper
       const getTokens = (str) => str.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter(t => t.length > 2);
       const cleanTokens = getTokens(cleanTitle);
 
-      // 3. Search Strategy: "Artist Radio" priority
+      // 4. Search Strategy
       const searchOptions = { limit: 25, type: 'video' };
       let related = [];
       
+      const sourceIsMix = cleanTitle.toLowerCase().includes('mix') || 
+                          sourceTitle.toLowerCase().includes('mix') ||
+                          sourceTitle.toLowerCase().includes('transition') ||
+                          sourceTitle.match(/\s+x\s+/);
+      
       try {
-          if (currentArtist) {
+          // Robust Context Logic:
+          // If we extracted the Artist from the Title (e.g. "Travis Scott - Sicko Mode"), 
+          // we TRUST the artist, even if it's a Mix.
+          // If we rely on Channel Name, and it's a Mix, we IGNORE it (assume it's an Uploader like "HipHopHub").
+          const isTrustworthy = artistExtracted || !sourceIsMix;
+
+          if (usedArtist && isTrustworthy) {
                // Strategy A: Artist Mix (Best for "Radio" feel)
-               // Randomize query to get fresh results to avoid Bubble
                const scenarios = [
-                   `${currentArtist} mix`,
-                   `${currentArtist} radio`,
-                   `songs like ${cleanTitle}`,
-                   `${cleanTitle}`
+                   `${usedArtist} mix`,
+                   `${usedArtist} radio`,
+                   `songs like ${cleanTitle} by ${usedArtist}`,
+                   `${cleanTitle}` // safe fallback
                ];
                const query = scenarios[Math.floor(Math.random() * scenarios.length)];
-               console.log(`[RecEngine] Searching (Strategy A): "${query}"`);
+               console.log(`[RecEngine] Searching (Strategy A - Artist): "${query}"`);
                related = await YouTube.search(query, searchOptions);
           }
           
           if (!related || related.length === 0) {
-               // Strategy B: Title based (Fallback)
-               console.log(`[RecEngine] Searching (Strategy B): "${cleanTitle}"`);
+               console.log(`[RecEngine] Searching (Strategy B - Title): "${cleanTitle}"`);
                related = await YouTube.search(cleanTitle, searchOptions);
           }
       } catch (e) {
@@ -465,31 +494,41 @@ io.on('connection', (socket) => {
       }
       
       if (related && related.length > 0) {
-          // Filter 1: History & ID Check
+          // KEYWORDS BLOCKLIST
+          const garbageKeywords = ['hack', 'crackle', 'prank', 'react', 'tutorial', 'gameplay', 'trailer', 'teaser', 'remix contest', 'shorts', 'tiktok', 'reel'];
+
+          // Filter 1: History & ID Check & Anti-Garbage
           const distinctCandidates = related.filter(v => {
+              // A. Basic ID Checks
               if (v.id === lastVideoId) return false;
-              if (playHistory.some(h => h.id === v.id)) return false; // Already played
+              if (playHistory.some(h => h.id === v.id)) return false; 
               
-              // Filter 2: Content Check
+              // B. Anti-Garbage (Strict Quality Control)
+              // 1. Minimum Duration: 2 minutes (120s) -> Kills Shorts, TikToks, Memes
+              if (v.duration < 120000) return false; 
+              
+              // 2. Keyword Filter
+              if (garbageKeywords.some(w => v.title.toLowerCase().includes(w))) return false;
+
+              // C. Content Check
               const vTokens = getTokens(v.title);
               
-              // A. Strict History Check (Antibody against repeats)
-              // Reject if title is too similar to ANY recently played song
+              // 1. Strict History Check
               const historyConflict = playHistory.some(h => {
                   const hTokens = getTokens(h.title);
                   const intersection = vTokens.filter(t => hTokens.includes(t));
                   const overlap = intersection.length / Math.min(vTokens.length, hTokens.length || 1);
-                  return overlap > 0.6; // Reject if >60% match with history
+                  return overlap > 0.6; 
               });
               if (historyConflict) return false;
 
-              // B. "Same Song" Check (Current Context)
+              // 2. "Same Song" Check
               const intersection = vTokens.filter(t => cleanTokens.includes(t));
               const overlap = intersection.length / Math.min(vTokens.length, cleanTokens.length || 1);
-              if (overlap > 0.6) return false; // Reject "Lyrics", "Remix" of SAME song
+              if (overlap > 0.6) return false; 
               
-              // C. Artist Check (Prevent back-to-back same artist)
-              if (currentArtist && v.channel) {
+              // 3. Artist Check (Prevent back-to-back same artist)
+              if (currentArtist && v.channel && !sourceIsMix) {
                   const a1 = getTokens(currentArtist);
                   const a2 = getTokens(v.channel.name);
                   const artistOverlap = a1.filter(t => a2.includes(t)).length;
@@ -501,17 +540,19 @@ io.on('connection', (socket) => {
           
           let candidates = distinctCandidates;
           
-          // Fallback: If we filtered too much (e.g. only same artist left), relax Artist Check
           if (candidates.length === 0) {
                console.log('[RecEngine] Strict filters removed all. Relaxing Artist Check...');
                candidates = related.filter(v => {
                    if (v.id === lastVideoId) return false;
                    if (playHistory.some(h => h.id === v.id)) return false;
+                   // Anti-Garbage is NON-NEGOTIABLE
+                   if (v.duration < 120000) return false; 
+                   if (garbageKeywords.some(w => v.title.toLowerCase().includes(w))) return false;
                    
                    const vTokens = getTokens(v.title);
                    const intersection = vTokens.filter(t => cleanTokens.includes(t));
                    const overlap = intersection.length / Math.min(vTokens.length, cleanTokens.length || 1);
-                   if (overlap > 0.6) return false; // Still block same song
+                   if (overlap > 0.6) return false; 
                    return true; 
                });
           }
