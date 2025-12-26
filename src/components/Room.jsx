@@ -261,6 +261,13 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
     
     socket.on('sync_action', ({ type, payload, sender }) => {
         console.log('Room Logic: sync_action received', { type, payload, sender });
+        
+        // Anti-Echo: Ignore events triggered by ourselves to prevent feedback loops
+        if (sender === socket.id) {
+            console.log('[Room] Ignoring own sync_action echo:', type);
+            return;
+        }
+
         if (type === 'change_video') {
             console.log('Room Logic: Changing video to', payload);
             setCurrentVideoId(payload);
