@@ -12,6 +12,7 @@ const getYouTubeID = (url) => {
 export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, onPlay, onPause, onEnded, onSeek, isAdmin, socket, roomId, fitContainer = false }) => {
   const containerRef = useRef(null);
   const playerRef = useRef(null);
+  const lastLoadedIdRef = useRef(null); // Track loaded video to prevent redundant reloads
   const [videoId, setVideoId] = useState(propVideoId || getYouTubeID(url));
   const [isPlayerReady, setIsPlayerReady] = useState(false);
 
@@ -213,11 +214,12 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
 
       console.log(`[VideoPlayer] Switching video to: ${videoId}`);
       try {
-          // Check if same video is already loaded to prevent flashing/reload
-          const currentLoadedId = playerRef.current.getVideoData?.()?.video_id;
-          if (currentLoadedId === videoId) {
-               console.log('[VideoPlayer] Video already loaded, skipping reload.');
+
+          // Robust check using internal Ref instead of querying player state (which can be flaky)
+          if (lastLoadedIdRef.current === videoId) {
+               console.log('[VideoPlayer] Video matches internal ref. Strictly skipping reload.');
           } else {
+               lastLoadedIdRef.current = videoId;
                playerRef.current.loadVideoById(videoId);
           }
 
