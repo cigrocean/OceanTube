@@ -26,9 +26,9 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
   : ['http://localhost:5173'];
 
 // Apply CORS only to API routes to avoid conflict with Socket.IO
-app.use('/api', cors({
+app.use(cors({
   origin: allowedOrigins,
-  methods: ['GET', 'POST'],
+  methods: ['GET', 'POST', 'OPTIONS'],
   credentials: true
 }));
 
@@ -109,6 +109,7 @@ app.get('/api/search', async (req, res) => {
 // Active Rooms Endpoint
 // Active Rooms Endpoint
 app.get('/api/active-rooms', (req, res) => {
+  console.log('[API] User hit /api/active-rooms');
   res.set('Cache-Control', 'no-store');
   try {
       if (!rooms) return res.json([]);
@@ -140,7 +141,11 @@ app.get('/api/active-rooms', (req, res) => {
       res.status(500).json({ error: 'Internal Server Error' }); 
   }
 });
-app.use(express.static(path.join(__dirname, 'dist')));
+app.use(express.static(path.join(__dirname, 'dist'), {
+  setHeaders: (res, path) => {
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+  }
+}));
 
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {
