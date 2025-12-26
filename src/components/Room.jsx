@@ -288,6 +288,12 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
             id: uuidv4(),
             timestamp: new Date().toISOString()
         }]);
+        
+        // Admin: Check server state consistency to Resurrect video if needed
+        if (socket.id === adminId) {
+             console.log('[Room] New user joined. Checking server state consistency...');
+             socket.emit('get_state', roomId);
+        }
     });
 
     socket.on('user_left', ({ userId, count }) => {
@@ -373,7 +379,7 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
         socket.off('sync_action');
         socket.off('queue_updated');
     };
-  }, [socket]);
+  }, [socket, adminId]);
 
   // Auto-scroll chat
   useEffect(() => {
