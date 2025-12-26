@@ -1450,8 +1450,8 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                          alignItems: 'center', 
                          justifyContent: 'center',
                          gap: '0.5rem',
-                         opacity: queue.length === 0 ? 0.5 : 1,
-                         cursor: queue.length === 0 ? 'not-allowed' : 'pointer'
+                         opacity: (queue.length === 0 && !autoPlayEnabled) ? 0.5 : 1,
+                         cursor: (queue.length === 0 && !autoPlayEnabled) ? 'not-allowed' : 'pointer'
                        }}
                     >
                       <SkipForward size={20} /> <span>Skip</span>

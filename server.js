@@ -462,16 +462,30 @@ io.on('connection', (socket) => {
                     // Search with limit 15 to get variety
                     const isMix = (t) => t.toLowerCase().includes('mix') || t.toLowerCase().includes('radio');
                     
-                    // Search with limit 18 to get variety
-                    // Append "similar songs" to guide YouTube towards recommendations (unless it's already a Mix)
-                    const searchQuery = isMix(cleanTitle) ? cleanTitle : `${cleanTitle} similar songs`;
-                    console.log(`[AutoPlay] Query: "${searchQuery}"`);
-
-                    const related = await YouTube.search(searchQuery, { limit: 18, type: 'video' })
-                         .catch(e => {
-                             console.warn(`[AutoPlay] Search failed: ${e.message}`); 
-                             return [];
-                         });
+                    // Search Strategy: Tiered Fallback to GUARANTEE results
+                    let related = [];
+                    const searchOptions = { limit: 20, type: 'video' };
+                    
+                    try {
+                        // Tier 1: "Similar Songs" (Discovery Mode)
+                        let query = isMix(cleanTitle) ? cleanTitle : `${cleanTitle} similar songs`;
+                        console.log(`[AutoPlay] Searching (Tier 1): "${query}"`);
+                        related = await YouTube.search(query, searchOptions);
+                        
+                        // Tier 2: Clean Title (Broad Mode)
+                        if (!related || related.length === 0) {
+                             console.log(`[AutoPlay] Tier 1 empty. Retry (Tier 2): "${cleanTitle}"`);
+                             related = await YouTube.search(cleanTitle, searchOptions);
+                        }
+                        
+                        // Tier 3: Source Title (Panic Mode)
+                        if (!related || related.length === 0) {
+                             console.log(`[AutoPlay] Tier 2 empty. Retry (Tier 3): "${sourceTitle}"`);
+                             related = await YouTube.search(sourceTitle, searchOptions);
+                        }
+                    } catch (e) {
+                         console.warn(`[AutoPlay] Search System Error: ${e.message}`);
+                    }
                     
                     if (related && related.length > 0) {
                         // Filter 1: ID Check
@@ -531,11 +545,7 @@ io.on('connection', (socket) => {
                      return playNextVideo(roomId);
                 } else {
                     console.log('[AutoPlay] No valid related video found.');
-                     io.to(roomId).emit('chat_message', { 
-                         type: 'system', 
-                         content: `⚠️ Auto-Play failed: no related videos found.`,
-                         timestamp: new Date().toISOString()
-                     });
+                     // Silently fail if no video found, rather than spamming chat
                 }
 
              } catch (err) {
