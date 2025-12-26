@@ -501,6 +501,7 @@ io.on('connection', (socket) => {
                             : null;
                         
                         if (validNext) {
+                             nextVideoToPlay = {
                                  id: validNext.id,
                                  title: validNext.title,
                                  artist: validNext.channel.name,
