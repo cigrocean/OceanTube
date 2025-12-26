@@ -3,7 +3,7 @@ import { VideoPlayer } from './VideoPlayer';
 import { VideoSearch } from './VideoSearch';
 import { useSocket } from '../hooks/useSocket';
 import { useKeepAlive } from '../hooks/useKeepAlive';
-import { Send, Users, Film, MessageSquare, MonitorPlay, Crown, Edit2, Search as SearchIcon, X, Link as LinkIcon, UserCog, Lock, Key, Share2, LogOut, Check, ListPlus, PlayCircle, ChevronUp, ChevronDown, SkipForward, Copy, Smile, Image as ImageIcon, Paperclip, AlertTriangle, UserX, Sparkles } from 'lucide-react';
+import { Send, Users, Film, MessageSquare, MonitorPlay, Crown, Edit2, Search as SearchIcon, X, Link as LinkIcon, UserCog, Lock, Key, Share2, LogOut, Check, ListPlus, PlayCircle, ChevronUp, ChevronDown, SkipForward, Copy, Smile, Image as ImageIcon, Paperclip, AlertTriangle, UserX, Sparkles, Loader2 } from 'lucide-react';
 import EmojiPicker from 'emoji-picker-react';
 import imageCompression from 'browser-image-compression';
 import QRCode from 'react-qr-code';

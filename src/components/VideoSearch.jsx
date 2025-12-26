@@ -46,10 +46,10 @@ export function VideoSearch({ onSelect, onClose, initialQuery = '', initialResul
       setProcessingId(video.id);
       onSelect(video);
       
-      // Safety reset after 3 seconds (in case it was just "Add to Queue" or server lag)
+      // Safety reset after 10 seconds (extended to block interaction until load)
       setTimeout(() => {
           setProcessingId(prev => (prev === video.id ? null : prev));
-      }, 3000);
+      }, 10000);
   };
 
   const handleSearch = async (e) => {
@@ -132,7 +132,15 @@ export function VideoSearch({ onSelect, onClose, initialQuery = '', initialResul
       <div className="search-modal">
         <div className="search-header">
           <h3>Search YouTube</h3>
-          <button className="btn-close" onClick={onClose} aria-label="Close search"><X size={24} /></button>
+          <button 
+             className="btn-close" 
+             onClick={onClose} 
+             disabled={!!processingId} // Block close while processing
+             aria-label="Close search"
+             style={{ opacity: processingId ? 0.3 : 1, cursor: processingId ? 'not-allowed' : 'pointer' }}
+          >
+             <X size={24} />
+          </button>
         </div>
 
         <form onSubmit={handleSearch} className="search-form">
@@ -143,9 +151,16 @@ export function VideoSearch({ onSelect, onClose, initialQuery = '', initialResul
               placeholder="Search for videos..."
               value={query}
               onChange={(e) => handleQueryChange(e.target.value)}
+              disabled={!!processingId} // Block typing
               autoFocus
             />
-            <button type="submit" className="btn-primary" disabled={isLoading} aria-label={isLoading ? 'Searching...' : 'Search'} style={{ minWidth: '100px' }}>
+            <button 
+               type="submit" 
+               className="btn-primary" 
+               disabled={isLoading || !!processingId} // Block search
+               aria-label={isLoading ? 'Searching...' : 'Search'} 
+               style={{ minWidth: '100px', cursor: processingId ? 'not-allowed' : 'pointer', opacity: processingId ? 0.6 : 1 }}
+            >
               {isLoading ? <Loader2 size={18} className="animate-spin" /> : 'Search'}
             </button>
           </div>
