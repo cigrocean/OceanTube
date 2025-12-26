@@ -213,10 +213,14 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
 
       console.log(`[VideoPlayer] Switching video to: ${videoId}`);
       try {
-          // If we are already playing, load and play.
-          // If we were paused, cued might be better, but for auto-play we usually want to play.
-          // Given the server auto-play nature, we should force play.
-          playerRef.current.loadVideoById(videoId);
+          // Check if same video is already loaded to prevent flashing/reload
+          const currentLoadedId = playerRef.current.getVideoData?.()?.video_id;
+          if (currentLoadedId === videoId) {
+               console.log('[VideoPlayer] Video already loaded, skipping reload.');
+          } else {
+               playerRef.current.loadVideoById(videoId);
+          }
+
           if (playing) {
               setTimeout(() => {
                  // Aggressive play enforcement

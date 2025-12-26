@@ -210,12 +210,28 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
     }
   }, [socket?.id, roomId, displayName, sessionId, socketPassword]);
 
+  const videoIdRef = useRef(null);
+  useEffect(() => { videoIdRef.current = currentVideoId; }, [currentVideoId]);
+
   useEffect(() => {
     if (!socket) return;
 
     socket.on('sync_state', (state) => {
         console.log('Room Logic: sync_state received', state);
         setUsers(state.users);
+
+        // State Resurrection (Server Restart Recovery)
+        // If we are admin, have a video locally, but server says null... restore it!
+        // We check if WE are the admin in the NEW state (or existing state)
+        if (state.admin === socket.id && !state.videoId && videoIdRef.current) {
+             console.log('[Room] Server state empty (Restart detected?). Restoring video:', videoIdRef.current);
+             socket.emit('sync_action', { 
+                 roomId, 
+                 type: 'change_video', 
+                 payload: videoIdRef.current 
+             });
+        }
+        
         if (state.videoId) {
             console.log('Room Logic: Updating videoId to', state.videoId);
             setCurrentVideoId(state.videoId);
