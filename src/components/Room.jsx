@@ -458,6 +458,10 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
       return;
     }
     
+    // Optimistic Update
+    setCurrentVideoId(videoId);
+    setIsPlaying(true);
+    
     socket?.emit('sync_action', { roomId, type: 'change_video', payload: videoId });
     setVideoInput('');
     setUrlInputError('');
@@ -883,6 +887,10 @@ export function Room({ roomId, username, initialPassword, onLeave }) {
                    <button 
                        className="btn-primary" 
                        onClick={() => {
+                           // Optimistic Update: Play immediately for Admin
+                           setCurrentVideoId(pendingVideo.id);
+                           setIsPlaying(true);
+                           
                            socket?.emit('sync_action', { roomId, type: 'change_video', payload: pendingVideo.id });
                            setShowQueueOption(false);
                            setPendingVideo(null);

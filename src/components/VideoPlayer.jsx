@@ -45,7 +45,7 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
             console.log('VideoPlayer: ID removed, stopping playback (keeping instance)');
             try { playerRef.current.stopVideo(); } catch(e){}
         }
-        return;
+        // Fall through to allow initialization if player doesn't exist yet
     }
 
     if (playerRef.current) return; // Already initialized
@@ -69,7 +69,7 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
             return;
         }
         
-        console.log('VideoPlayer: Creating player for', videoId);
+        console.log('VideoPlayer: Creating player (Pre-init)');
 
         containerRef.current.innerHTML = ''; 
         const playerDiv = document.createElement('div');
@@ -79,7 +79,7 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
             const player = new window.YT.Player(playerDiv, {
                 height: '100%',
                 width: '100%',
-                videoId: videoId, 
+                videoId: videoId || undefined, 
                 playerVars: {
                     autoplay: 0,
                     controls: 1,
