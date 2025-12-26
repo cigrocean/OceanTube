@@ -1,4 +1,3 @@
-```javascript
 import express from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
@@ -55,27 +54,25 @@ app.get('/api/search', async (req, res) => {
       const isFresh = (Date.now() - cached.timestamp) < CACHE_TTL;
       
       if (isFresh) {
-          console.log(`[Search] Serving cached results for: "${query}"`);
+          console.log('[Search] Serving cached results for: "' + query + '"');
           return res.json(cached.results);
       }
   }
 
   try {
-      console.log(`[Search] Fetching from YouTube (youtube-sr): "${query}"`);
-      // Use youtube-sr for faster results
-      const videos = await YouTube.search(query, { limit: 20, type: 'video' });
+      console.log('[Search] Fetching from YouTube (yts): "' + query + '"');
+      const r = await yts(query);
+      const videos = r.videos.map(v => ({
+          id: v.videoId,
+          title: v.title,
+          author: v.author ? v.author.name : 'Unknown',
+          thumbnail: v.thumbnail, 
+          duration: v.seconds * 1000 // yts returns seconds, client expects ms
+      }));
       
       if (!videos || videos.length === 0) {
            return res.json([]);
       }
-
-      const results = videos.map(video => ({
-          id: video.id,
-          title: video.title,
-          author: video.channel ? video.channel.name : 'Unknown',
-          thumbnail: video.thumbnail ? video.thumbnail.url : '', 
-          duration: video.duration / 1000 // youtube-sr returns ms
-      }));
       
       // 2. Store in Cache
       searchCache.set(normalizedQuery, {
