@@ -56,6 +56,7 @@ const rooms = {};
 // Active Rooms Endpoint (Moved to top)
 app.get('/api/active-rooms', (req, res) => {
   console.log('[API] User hit /api/active-rooms');
+  return res.send(`DEBUG_API_HIT: url=${req.url}`);
   res.set('Cache-Control', 'no-store');
   try {
       if (!rooms) return res.json([]);
@@ -1104,6 +1105,7 @@ app.use(express.static(path.join(__dirname, 'dist')));
 
 // SPA Catch-all: specific routes should be API, everything else is React
 app.get('*', (req, res) => {
+  return res.send(`DEBUG_SPA_FALLBACK: url=${req.url} originalUrl=${req.originalUrl}`);
   // Don't intercept API routes
   if (req.url.startsWith('/api')) return res.status(404).json({ error: 'Not Found' });
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
