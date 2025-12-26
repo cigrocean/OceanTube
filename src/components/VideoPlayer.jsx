@@ -217,6 +217,11 @@ export const VideoPlayer = ({ videoId: propVideoId, url, onProgress, playing, on
           // If we were paused, cued might be better, but for auto-play we usually want to play.
           // Given the server auto-play nature, we should force play.
           playerRef.current.loadVideoById(videoId);
+          if (playing) {
+              setTimeout(() => {
+                 playerRef.current?.playVideo();
+              }, 150); // Small delay to ensure load transition
+          }
       } catch(e) {
           console.error('[VideoPlayer] Error loading video:', e);
       }

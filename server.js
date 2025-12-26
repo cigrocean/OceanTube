@@ -468,12 +468,27 @@ io.on('connection', (socket) => {
           const distinctCandidates = candidates.filter(v => {
               if (isMix(v.title)) return true; // Lofi/Mixes: Allow anything similar
               
-              // Pop/Rock: Force Variety
-              // 1. Avoid exact same title (e.g. Lyrics version)
-              if (v.title.toLowerCase().includes(cleanTitle.toLowerCase())) return false;
+              // Tokenize for strict comparison
+              const getTokens = (str) => str.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter(t => t.length > 2);
+              const cleanTokens = getTokens(cleanTitle);
+              const vTokens = getTokens(v.title);
               
-              // 2. Avoid same artist (if known) to mimic Spotify "Radio"
-              if (currentArtist && v.channel && v.channel.name === currentArtist) return false;
+              // 1. Strict Title Check
+              // Calculate overlap of meaningful words
+              const intersection = vTokens.filter(t => cleanTokens.includes(t));
+              const overlap = intersection.length / Math.min(vTokens.length, cleanTokens.length || 1);
+              
+              // Reject if > 50% overlap (e.g. "Girls Like You" vs "Girls Like You Lyrics")
+              if (overlap > 0.5) return false;
+              
+              // 2. Strict Artist Check
+              // Reject if ANY main artist name word matches (e.g. "Maroon" matches "Maroon 5")
+              if (currentArtist && v.channel) {
+                  const a1 = getTokens(currentArtist);
+                  const a2 = getTokens(v.channel.name);
+                  const artistOverlap = a1.filter(t => a2.includes(t)).length;
+                  if (artistOverlap > 0 && a1.length > 0) return false; 
+              }
               
               return true;
           });
