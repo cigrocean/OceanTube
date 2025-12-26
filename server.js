@@ -77,7 +77,7 @@ app.get('/api/search', async (req, res) => {
       // 2. Store in Cache
       searchCache.set(normalizedQuery, {
           timestamp: Date.now(),
-          results: results
+          results: videos
       });
       
       // Prune cache if too large
@@ -86,7 +86,7 @@ app.get('/api/search', async (req, res) => {
           searchCache.delete(firstKey);
       }
       
-      return res.json(results);
+      return res.json(videos);
   } catch (err) {
       console.error('YouTube Search Failed:', err);
       res.status(500).json({ error: `Search failed: ${err.message}` });
